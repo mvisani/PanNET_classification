@@ -16,16 +16,16 @@ rm(list = ls())
 library(DMRcate)
 library(ChAMP)
 library(minfi)
+library(readr)
+library(base)
 source("ChAMP_functions_Lionel_Philipp_220727.R")
 ```
 
+# EPIC pre-process
 Read the raw data.The function readRDS allows the read R Data Format: RDS
 ```{r}
-path_epic <- "P:/Forschung/GRP Perren_Marinoni/1. Group/2. People/2. Students/Marco_Visani/raw_data/training_EPIC.Rds"
-#path_450k <- "P:/Forschung/GRP Perren_Marinoni/1. Group/2. People/2. Students/Marco_Visani/raw_data/training_450K.Rds"
-
+path_epic <- "./raw_data/training_EPIC.Rds"
 meth_epic.rgSet <-  readRDS(path_epic)
-#meth_450.rgSet <- readRDS(path_450k)
 ```
 
 ```{r}
@@ -35,9 +35,9 @@ meth_epic.rgSet <-  readRDS(path_epic)
 ```
 
 ## run NOOB 
-```{r}
-METH_epic <- champ.load_extended(rgSet_object = meth_epic.rgSet, 
-                           sampleSheet = METH_epic.sampleSheet,
+```{r, message=FALSE}
+meth_epic <- champ.load_extended(rgSet_object = meth_epic.rgSet, 
+                           sampleSheet = meth_epic.sampleSheet,
                            method = "minfi", 
                            filterDetP = T, # include low p value probes
                            filterBeads = T, # include probes detected in few beads
@@ -48,9 +48,83 @@ METH_epic <- champ.load_extended(rgSet_object = meth_epic.rgSet,
                            dataToInclude = c("loadQC", "mset"),
                            ProbeCutoff = 0,
                            force = F)
-
+rm(meth_epic.rgSet)
 ```
+
+Removing legacy probes. 
 ```{r}
+EPIC_legacy_probes <-  read_delim("P:/Forschung/GRP Perren_Marinoni/1. Group/2. People/17. Philipp Kirchner/projects/shared_data/Illumina_methylation_arrays/MethylationEPIC Missing Legacy CpG (v1.0_B3 vs. v1.0_B2).txt.gz",
+                                delim = "\t",
+                                show_col_types = F)
 
+meth_epic$mset <- meth_epic$mset[!(rownames(meth_epic$mset) %in% EPIC_legacy_probes$TargetID), ]
+rm(EPIC.manifest.hg19)
 ```
+
+
+## convert to beta values (meth / unmeth + meth)
+shared_probes is the row names -> order them and then fuse both files
+```{r}
+row_names_epic <- sort(rownames(meth_epic$mset))
+meth_epic.beta <- getBeta(meth_epic$mset, "Illumina")[row_names_epic, ]
+
+
+rm(meth_epic) #remove data that we don't need anymore... (to test)
+```
+
+
+
+
+# 450k pre-process
+```{r}
+path_450k <- "./raw_data/training_450K.Rds"
+meth_450.rgSet <- readRDS(path_450k)
+```
+
+## run NOOB 
+```{r, message=FALSE}
+meth_450 <- champ.load_extended(rgSet_object = meth_450.rgSet, 
+                           sampleSheet = meth_450.sampleSheet,
+                           method = "minfi", 
+                           filterDetP = T, # include low p value probes
+                           filterBeads = T, # include probes detected in few beads
+                           detPcut = 1,
+                           arraytype = "450K", # set accorgingly
+                           preproc = "Noob", 
+                           dyeMethod = "single", 
+                           dataToInclude = c("loadQC", "mset"),
+                           ProbeCutoff = 0,
+                           force = F)
+
+rm(meth_450.rgSet)
+```
+
+remove legacy probes from 450k array
+```{r}
+meth_450$mset <- meth_450$mset[!(rownames(meth_450$mset) %in% EPIC_legacy_probes$TargetID), ]
+```
+
+
+## convert beta values for 450k sample
+```{r}
+row_names_450 <- sort(rownames(meth_450$mset))
+meth_450.beta <- getBeta(meth_450$mset, "Illumina")[row_names_450, ]
+rm(meth_450)
+```
+
+
+
+
+
+
+# Combine 450K and EPIC beta matrices (intersection)
+
+
+
+# put probes in ascending order
+METH.norm = champ.norm(METH.beta, 
+                       arraytype = "450K", 
+                       cores = 1,
+                       resultsDir = "results")
+
 

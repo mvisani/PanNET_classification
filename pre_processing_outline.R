@@ -2,8 +2,7 @@
 # 030
 # 043
 
-source("ChAMP_functions_Lionel_Philipp_220727.R")
-
+source("/Bioinformatics/scripts/R/ChAMP_functions_Lionel_Philipp_220727.R")
 
 # build raw data 
 METH.rgSet = read.metharray.exp(targets = sampleSheet, # column Basename containing file locations
@@ -33,10 +32,21 @@ METH = champ.load_extended(rgSet_object = METH.rgSet,
                            dataToInclude = c("loadQC", "mset"),
                            force = F)
 
+# Removing legacy probes ()
+EPIC_legacy_probes = read_delim("P:/Forschung/GRP Perren_Marinoni/1. Group/2. \
+                                People/17. Philipp Kirchner/projects/shared_data\
+                                /Illumina_methylation_arrays/MethylationEPIC Missing Legacy CpG (v1.0_B3 vs. v1.0_B2).txt.gz", 
+                                delim = "\t",
+                                show_col_types = F)
+
+METH$mset = METH$mset[!(rownames(METH$mset) %in% EPIC_legacy_probes$TargetID), ]
+
+
 # convert to beta values (meth / unmeth + meth)
 METH.beta = getBeta(METH$mset, "Illumina")[METH.shared_probes, ]
 
 # Combine 450K and EPIC beta matrices (intersection)
+
 
 # put probes in ascending order
 METH.norm = champ.norm(METH.beta, 
