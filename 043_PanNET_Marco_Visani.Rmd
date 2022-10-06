@@ -1,0 +1,56 @@
+---
+title: "043_PanNET_Marco_Visani"
+author: "Marco Visani"
+date: "2022-10-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+ 
+# Part 1
+First load requiered fucntions 
+```{r, error=FALSE}
+rm(list = ls())
+library(DMRcate)
+library(ChAMP)
+library(minfi)
+source("ChAMP_functions_Lionel_Philipp_220727.R")
+```
+
+Read the raw data.The function readRDS allows the read R Data Format: RDS
+```{r}
+path_epic <- "P:/Forschung/GRP Perren_Marinoni/1. Group/2. People/2. Students/Marco_Visani/raw_data/training_EPIC.Rds"
+#path_450k <- "P:/Forschung/GRP Perren_Marinoni/1. Group/2. People/2. Students/Marco_Visani/raw_data/training_450K.Rds"
+
+meth_epic.rgSet <-  readRDS(path_epic)
+#meth_450.rgSet <- readRDS(path_450k)
+```
+
+```{r}
+# get detection p values
+#detectionP(METH.rgSet)
+#getNBeads(METH.rgSet)
+```
+
+## run NOOB 
+```{r}
+METH_epic <- champ.load_extended(rgSet_object = meth_epic.rgSet, 
+                           sampleSheet = METH_epic.sampleSheet,
+                           method = "minfi", 
+                           filterDetP = T, # include low p value probes
+                           filterBeads = T, # include probes detected in few beads
+                           detPcut = 1,
+                           arraytype = "EPIC", # set accorgingly
+                           preproc = "Noob", 
+                           dyeMethod = "single", 
+                           dataToInclude = c("loadQC", "mset"),
+                           ProbeCutoff = 0,
+                           force = F)
+
+```
+```{r}
+
+```
+
