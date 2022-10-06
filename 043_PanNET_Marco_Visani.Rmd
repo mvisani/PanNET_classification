@@ -54,3 +54,4 @@ METH_epic <- champ.load_extended(rgSet_object = meth_epic.rgSet,
 
 ```
 
+remove variables from ChAMP source file and add data to empty list
