@@ -10,7 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
  
 # Part 1
-First load requiered fucntions 
+First load required functions 
 ```{r, error=FALSE}
 rm(list = ls())
 library(DMRcate)
@@ -18,7 +18,9 @@ library(ChAMP)
 library(minfi)
 library(readr)
 library(base)
+library(doParallel)
 source("ChAMP_functions_Lionel_Philipp_220727.R")
+#source("test.R")
 ```
 
 # EPIC pre-process
@@ -35,7 +37,7 @@ meth_epic.rgSet <-  readRDS(path_epic)
 ```
 
 ## run NOOB 
-```{r, message=FALSE}
+```{r message=FALSE}
 meth_epic <- champ.load_extended(rgSet_object = meth_epic.rgSet, 
                            sampleSheet = meth_epic.sampleSheet,
                            method = "minfi", 
@@ -72,7 +74,7 @@ row_names_epic <- sort(rownames(meth_epic$mset))
 meth_epic.beta <- getBeta(meth_epic$mset, "Illumina")[row_names_epic, ]
 
 
-rm(meth_epic) #remove data that we don't need anymore... (to test)
+rm(meth_epic, row_names_epic) #remove data that we don't need anymore... (to test)
 ```
 
 
@@ -98,7 +100,6 @@ meth_450 <- champ.load_extended(rgSet_object = meth_450.rgSet,
                            dataToInclude = c("loadQC", "mset"),
                            ProbeCutoff = 0,
                            force = F)
-
 rm(meth_450.rgSet)
 ```
 
@@ -112,23 +113,36 @@ meth_450$mset <- meth_450$mset[!(rownames(meth_450$mset) %in% EPIC_legacy_probes
 ```{r}
 row_names_450 <- sort(rownames(meth_450$mset))
 meth_450.beta <- getBeta(meth_450$mset, "Illumina")[row_names_450, ]
-rm(meth_450)
+rm(meth_450, row_names_450)
 ```
 
 
 
 
-
-
 # Combine 450K and EPIC beta matrices (intersection)
+```{r}
+row_names <- intersect(rownames(meth_epic.beta), rownames(meth_450.beta))
+meth.beta <- cbind(meth_450.beta[row_names, ], meth_epic.beta[row_names,])
+
+#remove all unuseful data to free up RAM
+rm(EPIC_legacy_probes, hm450.manifest.hg19, multi.hit, probe.features, row_names, meth_450.beta, meth_epic.beta)
+
+```
 
 
 
 # put probes in ascending order
-METH.norm = champ.norm(METH.beta, 
+
+```{r}
+#free up unused memory
+gc()
+
+#detect cores for parallelism
+n_cores <- detectCores()-2
+
+#run function
+meth.norm <- champ.norm(meth.beta, 
                        arraytype = "450K", 
-                       cores = 1,
+                       cores = n_cores,
                        resultsDir = "results")
-
-
->>>>>>> 3fbb8c8b7cc3cac36beb9e6c773d2c7bbed9c067
+```

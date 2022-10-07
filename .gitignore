@@ -4,3 +4,5 @@ meta_data/training_EPIC_meta_data.txt
 meta_data/training_meta_data.txt
 raw_data/training_450K.Rds
 raw_data/training_EPIC.Rds
+.RDataTmp
+.Rhistory

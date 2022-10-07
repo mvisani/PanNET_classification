@@ -79,7 +79,7 @@ champ.load_extended <-function (directory = NULL, sampleSheet = NULL, method = "
       message("----------------------------------")
       message("Loading data from ", directory)
       # suppressWarnings(targets <- read.metharray.sheet(myDir)) # changed
-      rgSet <- read.metharray.exp(targets = sampleSheet, 
+      myLoad$rgSet <- read.metharray.exp(targets = sampleSheet, 
                                   extended = TRUE, 
                                   force = force)
     } else{
@@ -93,7 +93,7 @@ champ.load_extended <-function (directory = NULL, sampleSheet = NULL, method = "
       myLoad$rgSet@annotation <- c(array = "IlluminaHumanMethylationEPIC", 
                             annotation = "ilm10b4.hg19")
     sampleNames(myLoad$rgSet) = myLoad$rgSet[[1]]
-    pd <- pData(myLoad$rgSet)
+    myLoad$pd <- pData(myLoad$rgSet)
     if (preproc == "Raw"){
       message("No preprocessing was done! This is the default setting for ChAMP")
       myLoad$mset <- preprocessRaw(myLoad$rgSet) 
@@ -112,15 +112,15 @@ champ.load_extended <-function (directory = NULL, sampleSheet = NULL, method = "
       myLoad$mset_unfilt = myLoad$mset
     else
       myLoad$mset_unfilt = "empty"
-    detP <- detectionP(myLoad$rgSet)
+    myLoad$detP <- detectionP(myLoad$rgSet)
     message("<< Read DataSet Success. >>\n")
     if (methValue == "B") 
       tmp = getBeta(myLoad$mset, "Illumina")
     else tmp = getM(myLoad$mset)
-    tmp[detP >= detPcut] <- NA
+    tmp[myLoad$detP >= detPcut] <- NA
     message("The fraction of failed positions per sample\n \n            (You may need to delete samples with high proportion of failed probes\n): ")
     numfail <- matrix(colMeans(is.na(tmp)))
-    rownames(numfail) <- colnames(detP)
+    rownames(numfail) <- colnames(myLoad$detP)
     colnames(numfail) <- "Failed CpG Fraction."
     print(numfail)
     RemainSample <- which(numfail < SampleCutoff)
@@ -130,16 +130,16 @@ champ.load_extended <-function (directory = NULL, sampleSheet = NULL, method = "
                                                               SampleCutoff)], collapse = ","), " will be deleted.\n", 
               "There are ", length(RemainSample), " samples left for analysis.\n")
     myLoad$rgSet <- myLoad$rgSet[, RemainSample]
-    detP <- detP[, RemainSample]
+    myLoad$detP <- myLoad$detP[, RemainSample]
     myLoad$mset <- myLoad$mset[, RemainSample]
-    pd <- pd[RemainSample, ]
+    myLoad$pd <- myLoad$pd[RemainSample, ]
     tmp <- tmp[, RemainSample]
     if (filterDetP) {
-      mset.f = mset[rowSums(is.na(tmp)) <= ProbeCutoff * 
-                      ncol(detP), ]
+      mset.f = myLoad$mset[rowSums(is.na(tmp)) <= ProbeCutoff * 
+                      ncol(myLoad$detP), ]
       
       # As an addition to the original function the filtered probes are saved in a variable to be able to save the information with the data 
-      high.detPvalue <- dim(mset)[1] - dim(mset.f)[1]
+      high.detPvalue <- dim(myLoad$mset)[1] - dim(mset.f)[1]
       
       if (ProbeCutoff == 0) {
         message("Filtering probes with a detection p-value above ", 
@@ -151,9 +151,9 @@ champ.load_extended <-function (directory = NULL, sampleSheet = NULL, method = "
                 detPcut, " in at least ", ProbeCutoff * 100, 
                 "% of samples has removed ", high.detPvalue, " probes from the analysis. If a large number of probes have been removed, ChAMP suggests you look at the failedSample file to identify potentially bad samples.")
       }
-      mset = mset.f
+      myLoad$mset = mset.f
       tmp <- tmp[rowSums(is.na(tmp)) <= ProbeCutoff * 
-                   ncol(detP), ]
+                   ncol(myLoad$detP), ]
       message("<< Filter DetP Done. >>\n")
     }
     if (sum(is.na(tmp)) == 0) {
@@ -178,30 +178,30 @@ champ.load_extended <-function (directory = NULL, sampleSheet = NULL, method = "
       bc = mybeadcount(myLoad$rgSet)
       bc2 = bc[rowSums(is.na(bc)) < beadCutoff * (ncol(bc)), 
       ]
-      mset.f2 = mset[featureNames(mset) %in% row.names(bc2), 
+      mset.f2 = myLoad$mset[featureNames(myLoad$mset) %in% row.names(bc2), 
       ]
       
       # As an addition to the original function the filtered probes are saved in a variable to be able to save the information with the data 
-      low.beadcount <- dim(mset)[1] - dim(mset.f2)[1]
+      low.beadcount <- dim(myLoad$mset)[1] - dim(myLoad$mset.f2)[1]
       
       tmp <- tmp[rownames(tmp) %in% row.names(bc2), ]
       message("Filtering probes with a beadcount <3 in at least ", 
               beadCutoff * 100, "% of samples, has removed ", 
               low.beadcount, " from the analysis.")
-      mset = mset.f2
+      myLoad$mset = mset.f2
       message("<< Filter Beads Done. >>\n")
     }
     if (filterNoCG) {
-      mset.f2 = dropMethylationLoci(mset, dropCH = T)
+      mset.f2 = dropMethylationLoci(myLoad$mset, dropCH = T)
       
       # As an addition to the original function the filtered probes are saved in a variable to be able to save the information with the data 
-      no.CpG <- dim(mset)[1] - dim(mset.f2)[1]
+      no.CpG <- dim(myLoad$mset)[1] - dim(mset.f2)[1]
       
       tmp <- tmp[rownames(tmp) %in% featureNames(mset.f2), 
       ]
       message("Filtering non-cg probes, has removed ", 
               no.CpG, " from the analysis.")
-      mset <- mset.f2
+      myLoad$mset <- mset.f2
       message("<< Filter NoCG Done. >>\n")
     }
     if (filterSNPs) {
@@ -257,31 +257,31 @@ champ.load_extended <-function (directory = NULL, sampleSheet = NULL, method = "
                                                                TRUE)]
         }
       }
-      mset.f2 = mset[!featureNames(mset) %in% maskname, 
+      mset.f2 = myLoad$mset[!featureNames(myLoad$mset) %in% maskname, 
       ]
       
       # As an addition to the original function the filtered probes are saved in a variable to be able to save the information with the data 
-      snp.probes <- dim(mset)[1] - dim(mset.f2)[1]
+      snp.probes <- dim(myLoad$mset)[1] - dim(mset.f2)[1]
       
       tmp <- tmp[!rownames(tmp) %in% maskname, ]
       message("Filtering probes with SNPs as identified in Zhou's Nucleic Acids Research Paper, 2016, has removed ", 
               snp.probes, " from the analysis.")
-      mset = mset.f2
+      myLoad$mset = mset.f2
       message("<< Filter SNP Done. >>\n")
     }
     if (filterMultiHit) {
       data(multi.hit)
-      mset.f2 = mset[!featureNames(mset) %in% multi.hit$TargetID, 
+      mset.f2 = myLoad$mset[!featureNames(myLoad$mset) %in% multi.hit$TargetID, 
       ]
       
       # As an addition to the original function the filtered probes are saved in a variable to be able to save the information with the data 
-      multi.probes <- dim(mset)[1] - dim(mset.f2)[1]
+      multi.probes <- dim(myLoad$mset)[1] - dim(myLoad$mset.f2)[1]
       
       tmp <- tmp[!rownames(tmp) %in% multi.hit$TargetID, 
       ]
       message("Filtering probes that align to multiple locations as identified in Nordlund et al, has removed ", 
               multi.probes, " from the analysis.")
-      mset = mset.f2
+      myLoad$mset = mset.f2
       message("<< Filter MultiHit Done. >>\n")
     }
     if (filterXY) {
@@ -290,37 +290,37 @@ champ.load_extended <-function (directory = NULL, sampleSheet = NULL, method = "
       else data(probe.features)
       autosomes = probe.features[!probe.features$CHR %in% 
                                    c("X", "Y"), ]
-      mset.f2 = mset[featureNames(mset) %in% row.names(autosomes), 
+      mset.f2 = myLoad$mset[featureNames(myLoad$mset) %in% row.names(autosomes), 
       ]
       
       # As an addition to the original function the filtered probes are saved in a variable to be able to save the information with the data 
-      XY.probes <- dim(mset)[1] - dim(mset.f2)[1]
+      XY.probes <- dim(myLoad$mset)[1] - dim(mset.f2)[1]
       
       tmp <- tmp[rownames(tmp) %in% row.names(autosomes), 
       ]
       message("Filtering probes on the X or Y chromosome has removed ", 
               XY.probes, " from the analysis.")
-      mset = mset.f2
+      myLoad$mset = mset.f2
       message("<< Filter XY chromosome Done. >>\n")
     }
     message(paste(if (methValue == "B") 
       "[Beta"
       else "[M", "value is selected as output.]\n"))
-    beta.raw <- tmp
-    intensity <- minfi::getMeth(mset) + minfi::getUnmeth(mset)
-    detP <- detP[which(row.names(detP) %in% row.names(beta.raw)), 
+    myLoad$beta <- tmp
+    myLoad$intensity <- minfi::getMeth(myLoad$mset) + minfi::getUnmeth(myLoad$mset)
+    myLoad$detP <- myLoad$detP[which(row.names(myLoad$detP) %in% row.names(myLoad$beta)), 
     ]
-    if (min(beta.raw, na.rm = TRUE) <= 0) 
-      beta.raw[beta.raw <= 0] <- min(beta.raw[beta.raw > 
+    if (min(myLoad$beta, na.rm = TRUE) <= 0) 
+      myLoad$beta[myLoad$beta <= 0] <- min(myLoad$beta[myLoad$beta > 
                                                 0])
     message("Zeros in your dataset have been replaced with smallest positive value.\n")
-    if (max(beta.raw, na.rm = TRUE) >= 0) 
-      beta.raw[beta.raw >= 1] <- max(beta.raw[beta.raw < 
+    if (max(myLoad$beta, na.rm = TRUE) >= 0) 
+      myLoad$beta[myLoad$beta >= 1] <- max(myLoad$beta[myLoad$beta < 
                                                 1])
     message("One in your dataset have been replaced with largest value below 1.\n")
-    message("The analysis will be proceed with ", dim(beta.raw)[1], 
-            " probes and ", dim(beta.raw)[2], " samples.\n")
-    message("Current Data Set contains ", sum(is.na(beta.raw)), 
+    message("The analysis will be proceed with ", dim(myLoad$beta)[1], 
+            " probes and ", dim(myLoad$beta)[2], " samples.\n")
+    message("Current Data Set contains ", sum(is.na(myLoad$beta)), 
             " NA in ", if (methValue == "B") 
               "[Beta]"
             else "[M]", " Matrix.\n")
@@ -331,7 +331,7 @@ champ.load_extended <-function (directory = NULL, sampleSheet = NULL, method = "
     message("adding QC information")
     # This is a new addition to the ChAMP load function
     # Originally I added is information via attibutes but it is much easier to simply append it to the output list
-    loadQC = list(fraction_failed_CpG = as.data.frame(numfail),
+    myLoad$loadQC = list(fraction_failed_CpG = as.data.frame(numfail),
                   high_detection_pvalue = high.detPvalue,
                   low_bead_count = low.beadcount,
                   non_CpG_probes = no.CpG,
@@ -450,7 +450,7 @@ plot_BetaOrM <- function(data1, data2, pd, title = ""){
   require(RColorBrewer)
   par(mfrow=c(1,2))
   
-
+  
   densityPlot(data1, sampGroups=pd$Sample_Group, main=deparse(substitute(data1)), 
               legend=FALSE)
   legend("top", legend = levels(factor(pd$Sample_Group)), 
@@ -470,7 +470,7 @@ plot_BetaOrM <- function(data1, data2, pd, title = ""){
 # (adpated from https://www.bioconductor.org/packages/release/workflows/vignettes/methylationArrayAnalysis/inst/doc/methylationArrayAnalysis.html)
 
 plot_detP <- function(RGset, pd, detP, threshold){
-
+  
   pd$ID <- paste(pd$Sample_Group,pd$Sample_Name,sep=".")
   
   sampleNames(RGset) <- pd$ID
@@ -517,21 +517,21 @@ Beta_To_M <- function(beta_matrix){
 # --- NOTE ---
 # For now this function is only for EPIC arrays 450K arrays have other probe numberings
 # ------------
-plotBSCProbes = function(myLoad$rgSet, 
+plotBSCProbes = function(rgSet, 
                          control_type = c("BISULFITE CONVERSION I", 
                                           "BISULFITE CONVERSION II")){
   control_type = match.arg(control_type)
-  control_probes = getProbeInfo(myLoad$rgSet, type = "Control") %>% 
+  control_probes = getProbeInfo(rgSet, type = "Control") %>% 
     as.data.frame() %>% 
     filter(Type == control_type)
   # Fixing color names
   control_probes$Color[control_probes$Color == "Lime"] = "limegreen"
   
-  control_red = getRed(myLoad$rgSet[control_probes$Address, , drop = F]) %>% 
+  control_red = getRed(rgSet[control_probes$Address, , drop = F]) %>% 
     as.data.frame() %>% 
     rownames_to_column("Address") %>% 
     mutate(detection_channel = "red")
-  control_green = getGreen(myLoad$rgSet[control_probes$Address, , drop = F]) %>% 
+  control_green = getGreen(rgSet[control_probes$Address, , drop = F]) %>% 
     as.data.frame() %>% 
     rownames_to_column("Address") %>% 
     mutate(detection_channel = "green")
@@ -542,7 +542,7 @@ plotBSCProbes = function(myLoad$rgSet,
                  values_to = "intensity", 
                  - c(Address, detection_channel)) %>% 
     mutate(sample = factor(sample, 
-                           levels = colnames(myLoad$rgSet))) %>% 
+                           levels = colnames(rgSet))) %>% 
     left_join(.,
               control_probes, 
               by = "Address")
