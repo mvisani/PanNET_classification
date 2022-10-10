@@ -9,3 +9,4 @@ raw_data/training_EPIC.Rds
 meth_normalized.Rds
 meth_normalized.txt
 .RDataTmp1
+.RData
