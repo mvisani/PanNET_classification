@@ -12,7 +12,8 @@ knitr::opts_chunk$set(echo = TRUE)
 # Part 1
 First load required functions 
 ```{r, error=FALSE}
-rm(list = ls())
+setwd("P:/Forschung/GRP Perren_Marinoni/1. Group/2. People/2. Students/Marco_Visani")
+#rm(list = ls())
 library(DMRcate)
 library(ChAMP)
 library(minfi)
@@ -36,6 +37,7 @@ meth_epic.rgSet <-  readRDS(path_epic)
 #getNBeads(METH.rgSet)
 ```
 
+
 ## run NOOB 
 ```{r message=FALSE}
 meth_epic <- champ.load_extended(rgSet_object = meth_epic.rgSet, 
@@ -43,12 +45,12 @@ meth_epic <- champ.load_extended(rgSet_object = meth_epic.rgSet,
                            method = "minfi", 
                            filterDetP = T, # include low p value probes
                            filterBeads = T, # include probes detected in few beads
+                           beadCutoff = 1,
                            detPcut = 1,
                            arraytype = "EPIC", # set accorgingly
                            preproc = "Noob", 
                            dyeMethod = "single", 
                            dataToInclude = c("loadQC", "mset"),
-                           ProbeCutoff = 0,
                            force = F)
 rm(meth_epic.rgSet)
 ```
@@ -60,7 +62,8 @@ EPIC_legacy_probes <-  read_delim("P:/Forschung/GRP Perren_Marinoni/1. Group/2. 
                                 show_col_types = F)
 
 meth_epic$mset <- meth_epic$mset[!(rownames(meth_epic$mset) %in% EPIC_legacy_probes$TargetID), ]
-rm(EPIC.manifest.hg19)
+if(exists("EPIC.manifest.hg19"))
+  rm(EPIC.manifest.hg19)
 ```
 
 <<<<<<< HEAD
@@ -79,7 +82,6 @@ rm(meth_epic, row_names_epic) #remove data that we don't need anymore... (to tes
 
 
 
-
 # 450k pre-process
 ```{r}
 path_450k <- "./raw_data/training_450K.Rds"
@@ -87,18 +89,18 @@ meth_450.rgSet <- readRDS(path_450k)
 ```
 
 ## run NOOB 
-```{r, message=FALSE}
+```{r, message=FALSE, include=FALSE}
 meth_450 <- champ.load_extended(rgSet_object = meth_450.rgSet, 
                            sampleSheet = meth_450.sampleSheet,
                            method = "minfi", 
                            filterDetP = T, # include low p value probes
                            filterBeads = T, # include probes detected in few beads
+                           beadCutoff = 1,
                            detPcut = 1,
                            arraytype = "450K", # set accorgingly
                            preproc = "Noob", 
                            dyeMethod = "single", 
                            dataToInclude = c("loadQC", "mset"),
-                           ProbeCutoff = 0,
                            force = F)
 rm(meth_450.rgSet)
 ```
@@ -131,18 +133,52 @@ rm(EPIC_legacy_probes, hm450.manifest.hg19, multi.hit, probe.features, row_names
 
 
 
-# put probes in ascending order
+## put probes in ascending order
+Done before
 
-```{r}
-#free up unused memory
-gc()
-
-#detect cores for parallelism
-n_cores <- detectCores()-2
+#Normalize dataset
+```{r, message=F, include=FALSE}
+n_cores <- detectCores()/2
 
 #run function
 meth.norm <- champ.norm(meth.beta, 
                        arraytype = "450K", 
-                       cores = n_cores,
+                       cores = 1,
                        resultsDir = "results")
+saveRDS(meth.norm, file="meth_normalized.Rds", compress = T)
+if(exists("meth.beta"))
+  rm(meth.beta)
+#write.table(meth.norm, file = "meth_normalized.txt")
 ```
+
+
+Now that we have our dataset is normalized, we ant to make sure that all the samples are in the same order than in the metadata.
+```{r}
+meta_data <- read.table("./meta_data/training_meta_data.txt", sep = "\t", header = T)
+meth.norm <- meth.norm[, meta_data$Sample_Name]
+```
+
+# Remove batch effect and look for surrogate variable
+```{r}
+if(!exists("meth.norm"))
+  meth.norm <- readRDS("./meth_normalized.Rds")
+require(sva)
+
+meth_cb_model <- model.matrix(~ 1 , data = meta_data)
+
+meth_combat <- ComBat(ENmix::B2M(meth.norm),
+                 batch = meta_data$Slide,
+                 mod = meth_cb_model,
+                 BPPARAM = bpparam("SerialParam"))
+```
+
+## Are there significant surrogate variables?
+```{r}
+sva_model <- model.matrix(~ CC_Epi_newLRO, data = meta_data)
+sva_model_zero <- model.matrix(~1, data = meta_data)
+
+sva::sva(meth.norm,
+         mod = sva_model, 
+         mod0 = sva_model_zero)
+```
+

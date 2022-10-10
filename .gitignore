@@ -6,3 +6,6 @@ raw_data/training_450K.Rds
 raw_data/training_EPIC.Rds
 .RDataTmp
 .Rhistory
+meth_normalized.Rds
+meth_normalized.txt
+.RDataTmp1

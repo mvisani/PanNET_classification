@@ -33,9 +33,7 @@ METH = champ.load_extended(rgSet_object = METH.rgSet,
                            force = F)
 
 # Removing legacy probes ()
-EPIC_legacy_probes = read_delim("P:/Forschung/GRP Perren_Marinoni/1. Group/2. \
-                                People/17. Philipp Kirchner/projects/shared_data\
-                                /Illumina_methylation_arrays/MethylationEPIC Missing Legacy CpG (v1.0_B3 vs. v1.0_B2).txt.gz", 
+EPIC_legacy_probes = read_delim("P:/Forschung/GRP Perren_Marinoni/1. Group/2. People/17. Philipp Kirchner/projects/shared_data/Illumina_methylation_arrays/MethylationEPIC Missing Legacy CpG (v1.0_B3 vs. v1.0_B2).txt.gz", 
                                 delim = "\t",
                                 show_col_types = F)
 
@@ -53,6 +51,30 @@ METH.norm = champ.norm(METH.beta,
                        arraytype = "450K", 
                        cores = 1,
                        resultsDir = "results")
+
+beta = beta[, metaData$Sample_UID]
+
+METH.CB.model = model.matrix(~ 1 , data = metaData)
+METH.CB = ComBat(ENmix::B2M(beta_values), 
+	batch = metaData$Slide, 
+	mod = METH.model)
+
+# Are there significant surrogate variables?
+
+sva_model = model.matrix(~ CC_Epi_newLRO, data = metaData)
+sva_zero_model = model.matrix(~ 1, data = metaData)
+
+# If, are they correlated with any known variable
+
+# Pairwise correlation (top variable probes)
+
+# PCA
+
+pca_result = prcomp
+pca_eig = factoextra::get_eigenvalue(pca_result)
+
+# tSNE
+
 
 
 
