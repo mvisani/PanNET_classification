@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 First load required functions 
 ```{r, error=FALSE, message=F, include=FALSE}
 setwd("P:/Forschung/GRP Perren_Marinoni/1. Group/2. People/2. Students/Marco_Visani")
-rm(list = ls())
+#rm(list = ls())
 library(DMRcate)
 library(dplyr)
 library(ChAMP)
@@ -188,6 +188,7 @@ meth_sva <- sva::sva(dat = meth_combat,
 
 ## Do surrogate variable describe any known variable ?
 ```{r, fig.width = 14}
+require(ggplot2)
 #this part will tell if the surrogate variables are descibing other varibales of the dataset
 methSV <- as.data.frame(meth_sva$sv)
 colnames(methSV) <- paste0("S", colnames(methSV))
@@ -239,7 +240,7 @@ require(fafreqs)
 probevar <- rowVars(meth_combat)
 probevar <- order(probevar, decreasing = T)
 
-meth_combat_pca <- meth_combat[probevar[1:30000],meta_data$Sample_Name] #30000 is an arbitrary number --> look at paper on brain tumrors (they took 32000)
+meth_combat_pca <- meth_combat[probevar[1:30000],meta_data$Sample_Name] #30000 is an arbitrary number --> look at paper on brain tumors (they took 32000)
 
 meth_combat_pca <- t(meth_combat_pca)
 pca_result <- prcomp(meth_combat_pca)
@@ -268,8 +269,85 @@ cowplot::plot_grid(
     geom_point(),
   
   ggplot(pca_df, aes(color=MCT4_max, x=PC1, y=PC2))+
-    geom_point(), ncol = 2, align = "v"
+    geom_point(),
+  
+  ggplot(pca_df, aes(color=CC_Epi_newLRO, x=PC1, y=PC2))+
+    geom_point(), ncol =2, align = "v" 
 )
 
+```
+
+
+#Run t-SNE
+```{r, fig.height=10}
+require(Rtsne)
+require(RColorBrewer)
+set.seed(123) # setting a fixed seed allows reproducibility 
+tsne <- Rtsne::Rtsne(meth_combat_pca, theta=0.0, PCA=F,
+                     max_iter=2500) #with default perplexity of 30. Theta set to 0.0 for higher accuracy (but lower speed)
+                                    # PCA and max_iter are set as in Capper et al. paper
+tsne_df <- tsne$Y %>% as.data.frame() %>% rownames_to_column("Sample_Name")
+tsne_df$Sample_Name <- c(rownames(meth_combat_pca))
+tsne_df <- left_join(tsne_df, meta_data, by="Sample_Name")
+
+
+cowplot::plot_grid(
+  ggplot(tsne_df, aes(x=V1, y=V2, color=Technology))+
+  xlab("tSNE1") + ylab("tSNE2")+
+    geom_point(), 
+  
+  ggplot(tsne_df, aes(x=V1, y=V2, color=CC_Epi_newLRO))+
+    xlab("tSNE1") + ylab("tSNE2")+
+  geom_point(), 
+  
+  ggplot(tsne_df, aes(x=V1, y=V2, color=MEN1))+
+    xlab("tSNE1") + ylab("tSNE2")+
+  geom_point(), 
+  
+  ggplot(tsne_df, aes(x=V1, y=V2, color=DAXX_ATRX))+
+    xlab("tSNE1") + ylab("tSNE2")+
+  geom_point(), 
+  
+  ggplot(tsne_df, aes(x=V1, y=V2, color=Grade))+
+    xlab("tSNE1") + ylab("tSNE2")+
+  geom_point(), 
+  
+  ggplot(tsne_df, aes(x=V1, y=V2, color=MCT4_max))+
+    xlab("tSNE1") + ylab("tSNE2")+
+  geom_point(), ncol =2, align = "v"
+)
+```
+
+```{r}
+require(randomForest)
+#meth_combat_beta <- ENmix::M2B(meth_combat)
+#saveRDS(meth_combat_beta, file="./results/20221017_meth_combat_beta.Rds")
+
+if (!exists("meth_combat_beta"))
+  meth_combat_beta <- readRDS("./results/20221017_meth_combat_beta.Rds") %>% as.data.frame()
+if (!exists("meta_data"))
+  meta_data <- read.table("./meta_data/training_meta_data.txt", sep = "\t", header = T)
+```
+
+```{r}
+require(doParallel)
+
+
+sub_Set <- floor(seq(1, nrow(meth_combat_beta), length.out = floor( nrow(meth_combat_beta)/10000)))
+
+meth_forest <- randomForest(x=meth_combat_beta,
+                            mtry=floor(sqrt(nrow(meth_combat_beta))),
+                            sampsize=rep(10, 5),
+                            ntree=1000
+                            )
+
+```
+
+```{r}
+for (i in seq(1, length(sub_Set), by=2)) {
+  
+
+  print(sub_Set[i+1]-1)
+}
 ```
 

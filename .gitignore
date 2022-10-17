@@ -11,3 +11,5 @@ meth_normalized.txt
 .RDataTmp1
 .RData
 .DS_Store
+results/20221017_meth_combat_beta.csv.gz
+results/20221017_meth_combat_beta.Rds
