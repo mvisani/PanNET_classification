@@ -338,7 +338,7 @@ sub_Set <- floor(seq(1, nrow(meth_combat_beta), length.out = floor( nrow(meth_co
 meth_forest <- randomForest(x=meth_combat_beta,
                             mtry=floor(sqrt(nrow(meth_combat_beta))),
                             sampsize=rep(10, 5),
-                            ntree=1000
+                            ntree=100,
                             )
 
 ```
