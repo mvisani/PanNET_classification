@@ -13,3 +13,10 @@ meth_normalized.txt
 .DS_Store
 results/20221017_meth_combat_beta.csv.gz
 results/20221017_meth_combat_beta.Rds
+__pycache__/utils.cpython-39.pyc
+data/meta_data/training_450K_meta_data.txt
+data/meta_data/training_EPIC_meta_data.txt
+data/meta_data/training_meta_data.txt
+data/raw_data/training_450K.Rds
+data/raw_data/training_EPIC.Rds
+data/results/20221017_meth_combat_beta.Rds
