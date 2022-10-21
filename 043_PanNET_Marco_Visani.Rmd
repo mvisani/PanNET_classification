@@ -1,0 +1,394 @@
+---
+title: "043_PanNET_Marco_Visani"
+author: "Marco Visani"
+date: "2022-10-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+ 
+# Part 1
+First load required functions 
+```{r, error=FALSE, message=F, include=FALSE}
+setwd("P:/Forschung/GRP Perren_Marinoni/1. Group/2. People/2. Students/Marco_Visani")
+#rm(list = ls())
+library(DMRcate)
+library(dplyr)
+library(ChAMP)
+library(minfi)
+library(readr)
+library(base)
+library(doParallel)
+source("ChAMP_functions_Lionel_Philipp_220727.R")
+#source("test.R")
+```
+
+# EPIC pre-process
+Read the raw data.The function readRDS allows the read R Data Format: RDS
+```{r}
+path_epic <- "./data/raw_data/training_EPIC.Rds"
+meth_epic.rgSet <-  readRDS(path_epic)
+```
+
+```{r}
+# get detection p values
+#detectionP(METH.rgSet)
+#getNBeads(METH.rgSet)
+```
+
+
+## run NOOB 
+```{r message=FALSE}
+meth_epic <- champ.load_extended(rgSet_object = meth_epic.rgSet, 
+                           sampleSheet = meth_epic.sampleSheet,
+                           method = "minfi", 
+                           filterDetP = T, # include low p value probes
+                           filterBeads = T, # include probes detected in few beads
+                           beadCutoff = 1,
+                           detPcut = 1,
+                           arraytype = "EPIC", # set accorgingly
+                           preproc = "Noob", 
+                           dyeMethod = "single", 
+                           dataToInclude = c("loadQC", "mset"),
+                           force = F)
+rm(meth_epic.rgSet)
+```
+
+Removing legacy probes. 
+```{r}
+EPIC_legacy_probes <-  read_delim("P:/Forschung/GRP Perren_Marinoni/1. Group/2. People/17. Philipp Kirchner/projects/shared_data/Illumina_methylation_arrays/MethylationEPIC Missing Legacy CpG (v1.0_B3 vs. v1.0_B2).txt.gz",
+                                delim = "\t",
+                                show_col_types = F)
+
+meth_epic$mset <- meth_epic$mset[!(rownames(meth_epic$mset) %in% EPIC_legacy_probes$TargetID), ]
+if(exists("EPIC.manifest.hg19"))
+  rm(EPIC.manifest.hg19)
+```
+
+<<<<<<< HEAD
+remove variables from ChAMP source file and add data to empty list
+=======
+
+## convert to beta values (meth / unmeth + meth)
+shared_probes is the row names -> order them and then fuse both files
+```{r}
+row_names_epic <- sort(rownames(meth_epic$mset))
+meth_epic.beta <- getBeta(meth_epic$mset, "Illumina")[row_names_epic, ]
+
+
+rm(meth_epic, row_names_epic) #remove data that we don't need anymore... (to test)
+```
+
+
+
+# 450k pre-process
+```{r}
+path_450k <- "./data/raw_data/training_450K.Rds"
+meth_450.rgSet <- readRDS(path_450k)
+```
+
+## run NOOB 
+```{r, message=FALSE, include=FALSE}
+meth_450 <- champ.load_extended(rgSet_object = meth_450.rgSet, 
+                           sampleSheet = meth_450.sampleSheet,
+                           method = "minfi", 
+                           filterDetP = T, # include low p value probes
+                           filterBeads = T, # include probes detected in few beads
+                           beadCutoff = 1,
+                           detPcut = 1,
+                           arraytype = "450K", # set accorgingly
+                           preproc = "Noob", 
+                           dyeMethod = "single", 
+                           dataToInclude = c("loadQC", "mset"),
+                           force = F)
+rm(meth_450.rgSet)
+```
+
+remove legacy probes from 450k array
+```{r}
+meth_450$mset <- meth_450$mset[!(rownames(meth_450$mset) %in% EPIC_legacy_probes$TargetID), ]
+```
+
+
+## convert beta values for 450k sample
+```{r}
+row_names_450 <- sort(rownames(meth_450$mset))
+meth_450.beta <- getBeta(meth_450$mset, "Illumina")[row_names_450, ]
+rm(meth_450, row_names_450)
+```
+
+
+
+
+# Combine 450K and EPIC beta matrices (intersection)
+```{r}
+row_names <- intersect(rownames(meth_epic.beta), rownames(meth_450.beta))
+meth.beta <- cbind(meth_450.beta[row_names, ], meth_epic.beta[row_names,])
+
+#remove all unuseful data to free up RAM
+rm(EPIC_legacy_probes, hm450.manifest.hg19, multi.hit, probe.features, row_names, meth_450.beta, meth_epic.beta)
+
+```
+
+
+
+## put probes in ascending order
+Done before
+
+#Normalize dataset
+```{r, message=F, include=FALSE}
+n_cores <- detectCores()/2
+
+#run function
+meth.norm <- champ.norm(meth.beta, 
+                       arraytype = "450K", 
+                       cores = 1,
+                       resultsDir = "results")
+saveRDS(meth.norm, file="meth_normalized.Rds", compress = T)
+if(exists("meth.beta"))
+  rm(meth.beta)
+#write.table(meth.norm, file = "meth_normalized.txt")
+```
+
+
+# Remove batch effect and look for surrogate variable
+Now that we have our dataset is normalized, we ant to make sure that all the samples are in the same order than in the metadata.
+
+
+```{r}
+if(!exists("meth.norm"))
+  meth.norm <- readRDS("./data/results/meth_normalized.Rds")
+if(!exists("meta_data"))
+  meta_data <- read.table("./data/meta_data/training_meta_data.txt", sep = "\t", header = T)
+
+meth.norm <- meth.norm[, meta_data$Sample_Name]
+
+require(sva)
+
+meth_cb_model <- model.matrix(~ 1 , data = meta_data)
+
+meth_combat <- ComBat(ENmix::B2M(meth.norm),
+                 batch = meta_data$Slide,
+                 mod = meth_cb_model,
+                 BPPARAM = bpparam("SerialParam"))
+```
+
+## Are there significant surrogate variables?
+
+```{r}
+sva_model <- model.matrix(~ CC_Epi_newLRO, data = meta_data)
+sva_model_zero <- model.matrix(~ 1, data = meta_data)
+meth_sva <- sva::sva(dat = meth_combat, 
+                            mod = sva_model,
+                            mod0 = sva_model_zero, 
+                            n.sv = 42) #42 found by running it without this parameter (takes a while)
+```
+
+## Do surrogate variable describe any known variable ?
+```{r, fig.width = 14}
+require(ggplot2)
+#this part will tell if the surrogate variables are descibing other varibales of the dataset
+methSV <- as.data.frame(meth_sva$sv)
+colnames(methSV) <- paste0("S", colnames(methSV))
+methSV <- cbind(meta_data,methSV) 
+
+SVList = as.list(rep(NA, times = sum(grepl("SV", colnames(methSV)))))
+for (sv in seq_along(SVList)){
+  SVList[[sv]] = lapply(colnames(meta_data), function(var){
+    if(is.numeric(methSV[[var]]))
+      test_res = summary(lm(as.formula(paste0(var, "~ SV", sv)), data = methSV))$coef[2,4]
+    else
+      test_res = kruskal.test(as.formula(paste0(var, "~ SV", sv)), data = methSV)$p.value
+    data.frame(variable = var,
+               pval = test_res,
+               SV = paste0("SV", sv))
+  })
+}
+
+#This part plot the 
+bind_rows(SVList) %>% 
+  mutate(pval_bin = cut(-log10(pval), 
+                        breaks = c(0, -log10(0.05), 2, 5, 10, 300), 
+                        labels = c("a", "b", "c", "d", "e"), 
+                        include.lowest = T)) %>% 
+  ggplot(aes(x = SV, y = variable, fill = pval_bin)) + 
+  geom_tile() + 
+  coord_fixed() + 
+  scale_fill_manual(values = c("white", "pink", "orange", "red", "darkred"),
+                    limits = c("a", "b", "c", "d", "e"),
+                    labels = c("p >= 0.05", "p < 0.05", "p < 0.01", 
+                               expression("p < 1x" ~ 10^{-5}), 
+                               expression("p < 1x" ~ 10^{-10}))) +
+  theme_classic() + 
+  theme(legend.title = element_blank(), 
+        legend.text.align = 0, 
+        legend.background = element_rect(fill = "grey90"), 
+        axis.title = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) + 
+  labs(title = "SVs vs biological variables")
+```
+Good ? we have removed 
+
+
+#Run PCA
+
+most variable probes
+```{r, fig.height=10}
+require(fafreqs)
+probevar <- rowVars(meth_combat)
+probevar <- order(probevar, decreasing = T)
+
+meth_combat_pca <- meth_combat[probevar[1:30000],meta_data$Sample_Name] #30000 is an arbitrary number --> look at paper on brain tumors (they took 32000)
+
+meth_combat_pca <- t(meth_combat_pca)
+pca_result <- prcomp(meth_combat_pca)
+
+pca_df = pca_result$x %>% 
+  as.data.frame() %>% 
+  rownames_to_column("Sample_Name")
+pca_df = left_join(pca_df, 
+                   meta_data,
+                   by = "Sample_Name")
+pca_eig = factoextra::get_eigenvalue(pca_result)
+
+
+
+cowplot::plot_grid(
+  ggplot(pca_df, aes(color=Technology, x=PC1, y=PC2))+
+    geom_point(),
+  
+  ggplot(pca_df, aes(color=MEN1, x=PC1, y=PC2))+
+    geom_point(),
+  
+  ggplot(pca_df, aes(color=DAXX_ATRX, x=PC1, y=PC2))+
+    geom_point(),
+  
+  ggplot(pca_df, aes(color=Grade, x=PC1, y=PC2))+
+    geom_point(),
+  
+  ggplot(pca_df, aes(color=MCT4_max, x=PC1, y=PC2))+
+    geom_point(),
+  
+  ggplot(pca_df, aes(color=CC_Epi_newLRO, x=PC1, y=PC2))+
+    geom_point(), ncol =2, align = "v" 
+)
+
+```
+
+
+#Run t-SNE
+```{r, fig.height=10}
+require(Rtsne)
+require(RColorBrewer)
+set.seed(123) # setting a fixed seed allows reproducibility 
+tsne <- Rtsne::Rtsne(meth_combat_pca, theta=0.0, PCA=F,
+                     max_iter=2500) #with default perplexity of 30. Theta set to 0.0 for higher accuracy (but lower speed)
+                                    # PCA and max_iter are set as in Capper et al. paper
+tsne_df <- tsne$Y %>% as.data.frame() %>% rownames_to_column("Sample_Name")
+tsne_df$Sample_Name <- c(rownames(meth_combat_pca))
+tsne_df <- left_join(tsne_df, meta_data, by="Sample_Name")
+
+
+cowplot::plot_grid(
+  ggplot(tsne_df, aes(x=V1, y=V2, color=Technology))+
+  xlab("tSNE1") + ylab("tSNE2")+
+    geom_point(), 
+  
+  ggplot(tsne_df, aes(x=V1, y=V2, color=CC_Epi_newLRO))+
+    xlab("tSNE1") + ylab("tSNE2")+
+  geom_point(), 
+  
+  ggplot(tsne_df, aes(x=V1, y=V2, color=MEN1))+
+    xlab("tSNE1") + ylab("tSNE2")+
+  geom_point(), 
+  
+  ggplot(tsne_df, aes(x=V1, y=V2, color=DAXX_ATRX))+
+    xlab("tSNE1") + ylab("tSNE2")+
+  geom_point(), 
+  
+  ggplot(tsne_df, aes(x=V1, y=V2, color=Grade))+
+    xlab("tSNE1") + ylab("tSNE2")+
+  geom_point(), 
+  
+  ggplot(tsne_df, aes(x=V1, y=V2, color=MCT4_max))+
+    xlab("tSNE1") + ylab("tSNE2")+
+  geom_point(), ncol =2, align = "v"
+)
+```
+
+```{r}
+require(randomForest)
+#meth_combat_beta <- ENmix::M2B(meth_combat)
+#saveRDS(meth_combat_beta, file="./data/results/20221017_meth_combat_beta.Rds")
+
+if (!exists("meth_combat_beta"))
+  meth_combat_beta <- readRDS("./data/results/20221017_meth_combat_beta.Rds") %>% as.data.frame()
+if (!exists("meta_data"))
+  meta_data <- read.table("./data/meta_data/training_meta_data.txt", sep = "\t", header = T)
+```
+
+
+
+```{r}
+set.seed(1234)
+gini <- matrix(data = NA, nrow = nrow(meth_combat_beta), ncol = 100)
+accuracy <- matrix(data = NA, nrow = nrow(meth_combat_beta), ncol = 100)
+
+
+```
+
+
+
+
+
+
+
+
+```{r}
+#TEST !!!
+meta <- unique(meta_data$CC_Epi_newLRO)
+
+
+set.seed(12345)
+mm <- NULL
+for (i in 1:length(meta)) {
+  mm <- append(mm, sample(meta_data$Sample_Name[meta_data$CC_Epi_newLRO == meta[i]], size = 10))
+}
+
+
+sub_Set <- t(meth_combat_beta[, mm])
+test_forest <- randomForest(x=t(meth_combat_beta),
+                            y=as.factor(meta_data$CC_Epi_newLRO),
+                            mtry = floor(sqrt(nrow(meth_combat_beta))),
+                            ntree = 100,
+                            sampsize = rep(10,5), 
+                            importance = T
+                            )
+important_probes <- as.data.frame(test_forest$importance)
+
+require(dplyr)
+important_probes <-  important_probes %>% arrange(desc(important_probes))
+important_probes <- rownames(important_probes)
+important_probes <- important_probes[1:10000]
+
+```
+
+Here we found the most important probes we then chose the top 10'000 probes to create our classifier. 
+
+## final random classifier 
+```{r}
+
+final_forest <- randomForest(x=t(meth_combat_beta[important_probes, mm]), 
+                             mtry = 100,
+                             ntree = 10000)
+```
+
+
+## cross-validation
+```{r}
+
+```
+
+asd
