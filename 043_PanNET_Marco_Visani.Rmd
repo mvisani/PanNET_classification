@@ -319,12 +319,11 @@ cowplot::plot_grid(
 ```
 
 ```{r}
-require(randomForest)
 #meth_combat_beta <- ENmix::M2B(meth_combat)
 #saveRDS(meth_combat_beta, file="./data/results/20221017_meth_combat_beta.Rds")
 
 if (!exists("meth_combat_beta"))
-  meth_combat_beta <- readRDS("./data/results/20221017_meth_combat_beta.Rds") %>% as.data.frame()
+  meth_combat_beta <- as.data.frame(readRDS("./data/results/20221017_meth_combat_beta.Rds"))
 if (!exists("meta_data"))
   meta_data <- read.table("./data/meta_data/training_meta_data.txt", sep = "\t", header = T)
 ```
@@ -332,46 +331,96 @@ if (!exists("meta_data"))
 
 
 ```{r}
-set.seed(1234)
-gini <- matrix(data = NA, nrow = nrow(meth_combat_beta), ncol = 100)
-accuracy <- matrix(data = NA, nrow = nrow(meth_combat_beta), ncol = 100)
+require(randomForest)
+require(doParallel)
 
-
-```
-
-
-
-
-
-
-
-
-```{r}
-#TEST !!!
-meta <- unique(meta_data$CC_Epi_newLRO)
-
-
-set.seed(12345)
-mm <- NULL
-for (i in 1:length(meta)) {
-  mm <- append(mm, sample(meta_data$Sample_Name[meta_data$CC_Epi_newLRO == meta[i]], size = 10))
-}
-
-
-sub_Set <- t(meth_combat_beta[, mm])
-test_forest <- randomForest(x=t(meth_combat_beta),
-                            y=as.factor(meta_data$CC_Epi_newLRO),
-                            mtry = floor(sqrt(nrow(meth_combat_beta))),
+forest.classifier <- function(x, response, i=NA){
+  require(randomForest)
+  forest <- randomForest(x=t(x),
+                            y=response,
+                            mtry = floor(sqrt(nrow(x))),
                             ntree = 100,
                             sampsize = rep(10,5), 
                             importance = T
                             )
-important_probes <- as.data.frame(test_forest$importance)
+  
+  i <- matrix(data = NA, nrow = nrow(x), ncol = 2)
+  row.names(i) <- rownames(x)
+  i[,1] <- importance(forest, type=1) #mean decrease in accuracy
+  i[,2] <- importance(forest, type=2) #mean decrease in Gini
+  
+  return(i)
+}
 
+set.seed(1234)
+no_cores <- detectCores() - 1
+cl <- makeCluster(no_cores)
+registerDoParallel(cl)
+final_forest <- foreach(i=1:100) %dopar% forest.classifier(x=meth_combat_beta,
+                                                         response=as.factor(meta_data$CC_Epi_newLRO),
+                                                         i)
+stopCluster(cl)
+
+gini <- matrix(data = NA, nrow = nrow(meth_combat_beta), ncol = 100)
+accuracy <- matrix(data = NA, nrow = nrow(meth_combat_beta), ncol = 100)
+row.names(gini) <- rownames(meth_combat_beta);
+row.names(accuracy) <- rownames(meth_combat_beta)
+
+for (i in 1:length(final_forest)) {
+  ls <- unlist(final_forest[[i]])
+  ls <- ls[sort(rownames(meth_combat_beta)),]
+  accuracy[,i] <- ls[,1]
+  gini[,i] <- ls[,2]
+}
+
+```
+
+
+```{r}
+gini_ranked <- matrix(data = NA, nrow = nrow(meth_combat_beta), ncol = 100)
+accuracy_ranked <- matrix(data = NA, nrow = nrow(meth_combat_beta), ncol = 100)
+row.names(gini_ranked) <- rownames(meth_combat_beta);
+row.names(accuracy_ranked) <- rownames(meth_combat_beta)
+
+for (i in 1:ncol(gini)) {
+  accuracy_ranked[,i] <- rank(accuracy[,i], ties.method = "random")
+  gini_ranked[,i] <- rank(gini[,i], ties.method = "random")
+}
+
+```
+
+```{r}
+require(matrixStats)
+accuracy_ranked <- as.data.frame(cbind(accuracy_ranked, apply(accuracy_ranked, 1, median)))
+gini_ranked <-  as.data.frame(cbind(gini_ranked, apply(gini_ranked, 1, median)))
+
+```
+
+```{r}
+saveRDS(gini, file="./data/results/221025_gini.Rds")
+saveRDS(accuracy, file="./data/results/221025_accuracy.Rds")
+saveRDS(gini_ranked, file="./data/results/221025_gini_ranked.Rds")
+saveRDS(accuracy_ranked, file="./data/results/221025_accuracy_ranked.Rds")
+```
+
+
+```{r}
+if (!exists("accuracy_ranked"))
+  accuracy_ranked <- as.data.frame(readRDS("./data/results/221025_accuracy_ranked.Rds"))
+if (!exists("gini_ranked"))
+  gini_ranked <- as.data.frame(readRDS("./data/results/221025_gini_ranked.Rds"))
+```
+
+
+```{r}
 require(dplyr)
-important_probes <-  important_probes %>% arrange(desc(important_probes))
-important_probes <- rownames(important_probes)
-important_probes <- important_probes[1:10000]
+accuracy_ranked <- accuracy_ranked[order(-accuracy_ranked$V101), ]
+accuracy_important_probes <- rownames(accuracy_ranked)
+accuracy_important_probes <- accuracy_important_probes[1:10000]
+
+gini_ranked <- gini_ranked[order(-gini_ranked$V101), ]
+gini_important_probes <- rownames(gini_ranked)
+gini_important_probes <- gini_important_probes[1:10000]
 
 ```
 
@@ -379,16 +428,62 @@ Here we found the most important probes we then chose the top 10'000 probes to c
 
 ## final random classifier 
 ```{r}
-
-final_forest <- randomForest(x=t(meth_combat_beta[important_probes, mm]), 
+require(randomForest)
+accuracy_final_model <- randomForest(x=t(meth_combat_beta[accuracy_important_probes, ]),
+                             y = as.factor(meta_data$CC_Epi_newLRO), 
                              mtry = 100,
-                             ntree = 10000)
+                             ntree = 10000, 
+                             sampsize = rep(10,5),
+                             importance = TRUE)
+gini_final_model <- randomForest(x=t(meth_combat_beta[gini_important_probes, ]),
+                             y = as.factor(meta_data$CC_Epi_newLRO), 
+                             mtry = 100,
+                             ntree = 10000, 
+                             sampsize = rep(10,5),
+                             importance = TRUE)
+
+
 ```
 
 
 ## cross-validation
 ```{r}
-
+result <- rfcv(trainx = t(meth_combat_beta[accuracy_important_probes,]),
+     trainy = as.factor(meta_data$CC_Epi_newLRO),
+     cv.fold = 3)
+with(result, plot(n.var, error.cv, log="x", type="o", lwd=2))
 ```
 
-asd
+
+```{r}
+accuracy_final_model_2 <- randomForest(x=t(meth_combat_beta[accuracy_important_probes[1:1000], ]),
+                             y = as.factor(meta_data$CC_Epi_newLRO), 
+                             mtry = sqrt(1000),
+                             ntree = 10000, 
+                             sampsize = rep(10,5),
+                             importance = TRUE)
+print(accuracy_final_model_2)
+```
+
+The last one is a test. After cross-validation, we see that we might have over fitted the training data. With 10 times less probes we see that we increase by 4% the error rate. However, this might for future data to improve the model and avoid over fitting. 
+Last test is with only the 125 most variable probes :
+
+```{r}
+accuracy_final_model_3 <- randomForest(x=t(meth_combat_beta[accuracy_important_probes[1:125], ]),
+                             y = as.factor(meta_data$CC_Epi_newLRO), 
+                             mtry = sqrt(125),
+                             ntree = 10000, 
+                             sampsize = rep(10,5),
+                             importance = TRUE)
+print(accuracy_final_model_3)
+```
+
+Here again, we decrease in accuracy but according to the cross validation, this doesn't seem to be a big problem. --> check all this and discuss !! 
+
+
+```{r}
+cv1 <- predict(accuracy_final_model, t(meth_combat_beta[accuracy_important_probes, 1:55]))
+print(length(cv1))
+cv1
+```
+Last step doesn't seem correct... --> maybe with predict it works better

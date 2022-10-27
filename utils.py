@@ -1,8 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# @File:      URF.py
-# @Author:    Li Yao
-# @Created:   28/03/2018 7:56 PM
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.manifold import MDS
