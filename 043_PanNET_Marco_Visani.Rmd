@@ -447,6 +447,7 @@ gini_final_model <- randomForest(x=t(meth_combat_beta[gini_important_probes, ]),
                              importance = TRUE)
 
 
+print(accuracy_final_model)
 ```
 
 
@@ -455,7 +456,7 @@ gini_final_model <- randomForest(x=t(meth_combat_beta[gini_important_probes, ]),
 cross_validation <- rfcv(trainx = t(meth_combat_beta[accuracy_important_probes,]),
                          trainy = as.factor(meta_data$CC_Epi_newLRO),
                          cv.fold = 3)
-with(result, plot(n.var, error.cv, log="x", type="o", lwd=2))
+with(cross_validation, plot(n.var, error.cv, log="x", type="o", lwd=2))
 ```
 
 
@@ -487,8 +488,27 @@ Here again, we decrease in accuracy but according to the cross validation, this 
 
 
 ```{r}
-cv1 <- predict(accuracy_final_model, t(meth_combat_beta[accuracy_important_probes, 1:55]))
-print(length(cv1))
-print(cv1)
+cross_validation_2 <- rfcv(trainx = t(meth_combat_beta[accuracy_important_probes[1:1000], ]),
+                         trainy = as.factor(meta_data$CC_Epi_newLRO),
+                         cv.fold = 3)
+with(cross_validation_2, plot(n.var, error.cv, log="x", type="o", lwd=2))
 ```
 Last step doesn't seem correct... --> maybe with predict it works better
+
+
+```{r}
+cross_validation_3 <- rfcv(trainx = t(meth_combat_beta[accuracy_important_probes[1:250], ]),
+                         trainy = as.factor(meta_data$CC_Epi_newLRO),
+                         cv.fold = 3)
+with(cross_validation_3, plot(n.var, error.cv, log="x", type="o", lwd=2))
+```
+
+# Classifier score calibration
+```{r}
+require(glmnet)
+cv.glmnet(x = t(meth_combat_beta[accuracy_important_probes,]),
+       y= as.factor(meta_data$CC_Epi_newLRO), 
+       family = "multinomial"
+       ) %>% plot()
+```
+
