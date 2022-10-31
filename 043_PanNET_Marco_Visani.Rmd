@@ -409,6 +409,10 @@ if (!exists("accuracy_ranked"))
   accuracy_ranked <- as.data.frame(readRDS("./data/results/221025_accuracy_ranked.Rds"))
 if (!exists("gini_ranked"))
   gini_ranked <- as.data.frame(readRDS("./data/results/221025_gini_ranked.Rds"))
+if (!exists("meta_data"))
+  meta_data <- read.table(file = "./data/meta_data/training_meta_data.txt", sep = "\t", header = T)
+if (!exists("meth_combat_beta"))
+  meth_combat_beta <- as.data.frame(readRDS("./data/results/20221017_meth_combat_beta.Rds"))
 ```
 
 
@@ -448,14 +452,15 @@ gini_final_model <- randomForest(x=t(meth_combat_beta[gini_important_probes, ]),
 
 ## cross-validation
 ```{r}
-result <- rfcv(trainx = t(meth_combat_beta[accuracy_important_probes,]),
-     trainy = as.factor(meta_data$CC_Epi_newLRO),
-     cv.fold = 3)
+cross_validation <- rfcv(trainx = t(meth_combat_beta[accuracy_important_probes,]),
+                         trainy = as.factor(meta_data$CC_Epi_newLRO),
+                         cv.fold = 3)
 with(result, plot(n.var, error.cv, log="x", type="o", lwd=2))
 ```
 
 
 ```{r}
+#test with best 1'000 probes and not 10'000
 accuracy_final_model_2 <- randomForest(x=t(meth_combat_beta[accuracy_important_probes[1:1000], ]),
                              y = as.factor(meta_data$CC_Epi_newLRO), 
                              mtry = sqrt(1000),
@@ -484,6 +489,6 @@ Here again, we decrease in accuracy but according to the cross validation, this 
 ```{r}
 cv1 <- predict(accuracy_final_model, t(meth_combat_beta[accuracy_important_probes, 1:55]))
 print(length(cv1))
-cv1
+print(cv1)
 ```
 Last step doesn't seem correct... --> maybe with predict it works better
