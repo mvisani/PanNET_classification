@@ -1,8 +1,9 @@
 ---
 title: "043_PanNET_Marco_Visani"
 author: "Marco Visani"
-date: "2022-10-06"
-output: html_document
+date: "__`r Sys.Date()`__"
+output: html_document:
+  number_sections: true
 ---
 
 ```{r setup, include=FALSE}
@@ -504,11 +505,57 @@ with(cross_validation_3, plot(n.var, error.cv, log="x", type="o", lwd=2))
 ```
 
 # Classifier score calibration
+Check with lasso and ridge regression
+A regression model that uses L1 regularization technique is called Lasso Regression and model which uses L2 is called Ridge Regression. In the paper. the used an L2 meaning that a Ridge regression should be used
+```{r}
+require(ggplot2)
+require(ggridges)
+votes <- as.data.frame(accuracy_final_model[["votes"]])
+votes["predicted"] <- as.vector(accuracy_final_model[["predicted"]])
+votes["true"] <- as.vector(meta_data$CC_Epi_newLRO)
+votes <- votes[votes$predicted == votes$true, ]
+
+
+```
+
 ```{r}
 require(glmnet)
-cv.glmnet(x = t(meth_combat_beta[accuracy_important_probes,]),
-       y= as.factor(meta_data$CC_Epi_newLRO), 
-       family = "multinomial"
-       ) %>% plot()
+set.seed(7)
+accuracy_ridge <- glmnet(x = votes,
+                         y = as.factor(meta_data$CC_Epi_newLRO),
+                         family = "multinomial",
+                         alpha=0,) #alpha = 0 means Ridge or L2 regression. If alpha = 1 --> Lasso regression (L1)
+
+par(mfrow=c(1,2), cex=0.5, mar=c(3,3,4,1))
+plot(accuracy_ridge, xvar="lambda", main="Ridge or L2 regression")
 ```
+
+
+```{r}
+require(glmnet)
+require(tidyr)
+accuracy_cv_glmnet <- cv.glmnet(x = votes,
+                                y= as.factor(meta_data$CC_Epi_newLRO), 
+                                family = "multinomial",
+                                alpha=0,
+                                type.measure = "class"
+)
+
+plot(accuracy_cv_glmnet)
+coefficients <- coef(accuracy_cv_glmnet)
+
+### Now we want to find the probes that describe the best each class
+df <- data.frame(row.names = accuracy_important_probes)
+for (i in names(coefficients)) {
+  n <- as.matrix(coefficients[[i]])
+  #remove first row as it is the intercept
+  n <- as.data.frame(n[-1,])
+  colnames(n) <- i
+  df <- cbind(df, n)
+  #rm(n)
+}
+
+```
+
+
 
