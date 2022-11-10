@@ -16,14 +16,15 @@ library(rmarkdown)
 library(glmnet)
 library(doParallel)
 library(HandTill2001)
+setwd("..")
 
-cores <- 4
+cores <- detectCores()-1
 
 registerDoParallel(cores)
 
 message("loading data ...",Sys.time())
 if (!exists("betas"))
-  betas <- readRDS("./data/results/20221017_meth_combat_beta.Rds")
+  betas <- readRDS("./data/results/meth_combat_beta.Rds")
 if (!exists("meta_data"))
   meta_data <- read.table(file = "./data/meta_data/training_meta_data.txt", sep = "\t", header = T)
 

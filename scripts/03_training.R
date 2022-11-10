@@ -17,6 +17,7 @@ rm(list=ls())
 
 library(randomForest)
 library(doParallel)
+setwd("..")
 
 ntrees <- 10000  # 10000 in the paper, here 500 to speed up the example
 cores <- detectCores()-1
@@ -26,7 +27,7 @@ p <- 10000
 message("loading preprocessed data ...",Sys.time())
 #load(file.path("results","betas.ba.RData"))
 if (!exists("betas"))
-  betas <- as.data.frame(readRDS("./data/results/20221017_meth_combat_beta.Rds"))
+  betas <- as.data.frame(readRDS("./data/results/meth_combat_beta.Rds"))
 if (!exists("meta_data"))
   meta_data <- read.table(file = "./data/meta_data/training_meta_data.txt", sep = "\t", header = T)
 
@@ -89,7 +90,7 @@ rf.pred <- randomForest(betasy,
                         importance=TRUE,
                         #keep.inbag=TRUE,
                         do.trace=500,
-                        #seed=seed
+                        seed=seed
 )
 
 message("finished ...",Sys.time())

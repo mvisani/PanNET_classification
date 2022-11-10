@@ -15,6 +15,7 @@ library(randomForest)
 library(parallel)
 library(minfi)
 library(limma)
+setwd("..")
 
 ntrees <- 10000
 cores <- detectCores() - 1
@@ -30,7 +31,7 @@ folds <- 3
 
 #load(file.path("results","betas.ba.RData"))
 if (!exists("betas"))
-  betas <- readRDS("./data/results/20221017_meth_combat_beta.Rds")
+  betas <- readRDS("./data/results/meth_combat_beta.Rds")
 if (!exists("meta_data"))
   meta_data <- read.table(file = "./data/meta_data/training_meta_data.txt", sep = "\t", header = T)
 

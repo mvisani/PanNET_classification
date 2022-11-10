@@ -1,0 +1,332 @@
+---
+title: "043_panet_classification_summary"
+author: "Marco Visani"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    number_sections: true
+---
+
+
+# Introduction
+
+# Quality control 
+## Check for surrogate variables
+```{r}
+rm(list = ls())
+if(!exists("meta_data"))
+  meta_data <- read.table("./data/meta_data/training_meta_data.txt", sep = "\t", header = T)
+if(!exists("meth_combat_M"))
+  meth_combat_M <- readRDS("./data/results/meth_combat_M.Rds")
+if(!exists("meth_combat_beta"))
+  meth_combat_beta <- as.data.frame(readRDS("./data/results/meth_combat_beta.Rds"))
+if (!exists("meth_norm"))
+  meth_norm <- as.data.frame(readRDS("./data/results/meth_normalized.Rds"))
+
+require(sva)
+sva_model <- model.matrix(~ CC_Epi_newLRO, data = meta_data)
+sva_model_zero <- model.matrix(~ 1, data = meta_data)
+meth_sva <- sva::sva(dat = meth_combat_M, 
+                            mod = sva_model,
+                            mod0 = sva_model_zero, 
+                            n.sv = 42) #42 found by running it without this parameter (takes a while)
+```
+
+## Do surrogate variable describe any known variable ?
+```{r, fig.width = 14}
+require(ggplot2)
+require(dplyr)
+#this part will tell if the surrogate variables are descibing other varibales of the dataset
+methSV <- as.data.frame(meth_sva$sv)
+colnames(methSV) <- paste0("S", colnames(methSV))
+methSV <- cbind(meta_data,methSV) 
+
+SVList = as.list(rep(NA, times = sum(grepl("SV", colnames(methSV)))))
+for (sv in seq_along(SVList)){
+  SVList[[sv]] = lapply(colnames(meta_data), function(var){
+    if(is.numeric(methSV[[var]]))
+      test_res = summary(lm(as.formula(paste0(var, "~ SV", sv)), data = methSV))$coef[2,4]
+    else
+      test_res = kruskal.test(as.formula(paste0(var, "~ SV", sv)), data = methSV)$p.value
+    data.frame(variable = var,
+               pval = test_res,
+               SV = paste0("SV", sv))
+  })
+}
+
+#This part plot the 
+bind_rows(SVList) %>% 
+  mutate(pval_bin = cut(-log10(pval), 
+                        breaks = c(0, -log10(0.05), 2, 5, 10, 300), 
+                        labels = c("a", "b", "c", "d", "e"), 
+                        include.lowest = T)) %>% 
+  ggplot(aes(x = SV, y = variable, fill = pval_bin)) + 
+  geom_tile() + 
+  coord_fixed() + 
+  scale_fill_manual(values = c("white", "pink", "orange", "red", "darkred"),
+                    limits = c("a", "b", "c", "d", "e"),
+                    labels = c("p >= 0.05", "p < 0.05", "p < 0.01", 
+                               expression("p < 1x" ~ 10^{-5}), 
+                               expression("p < 1x" ~ 10^{-10}))) +
+  theme_classic() + 
+  theme(legend.title = element_blank(), 
+        legend.text.align = 0, 
+        legend.background = element_rect(fill = "grey90"), 
+        axis.title = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) + 
+  labs(title = "SVs vs biological variables")
+```
+
+
+## PCA
+```{r, fig.height=10}
+require(fafreqs)
+require(tibble)
+probevar <- rowVars(meth_combat_M)
+probevar <- order(probevar, decreasing = T)
+
+meth_combat_pca <- meth_combat_M[probevar[1:30000],meta_data$Sample_Name] #30000 is an arbitrary number --> look at paper on brain tumors (they took 32000)
+
+meth_combat_pca <- t(meth_combat_pca)
+pca_result <- prcomp(meth_combat_pca)
+
+pca_df = pca_result$x %>% 
+  as.data.frame() %>% 
+  rownames_to_column("Sample_Name")
+pca_df = left_join(pca_df, 
+                   meta_data,
+                   by = "Sample_Name")
+pca_eig = factoextra::get_eigenvalue(pca_result)
+
+
+
+cowplot::plot_grid(
+  ggplot(pca_df, aes(color=Technology, x=PC1, y=PC2))+
+    geom_point(),
+  
+  ggplot(pca_df, aes(color=MEN1, x=PC1, y=PC2))+
+    geom_point(),
+  
+  ggplot(pca_df, aes(color=DAXX_ATRX, x=PC1, y=PC2))+
+    geom_point(),
+  
+  ggplot(pca_df, aes(color=Grade, x=PC1, y=PC2))+
+    geom_point(),
+  
+  ggplot(pca_df, aes(color=MCT4_max, x=PC1, y=PC2))+
+    geom_point(),
+  
+  ggplot(pca_df, aes(color=CC_Epi_newLRO, x=PC1, y=PC2))+
+    geom_point(), ncol =2, align = "v" 
+)
+
+```
+
+
+## t-SNE
+```{r, fig.height=10}
+require(Rtsne)
+require(RColorBrewer)
+set.seed(123) # setting a fixed seed allows reproducibility 
+tsne <- Rtsne::Rtsne(meth_combat_pca, theta=0.0, PCA=F,
+                     max_iter=2500) #with default perplexity of 30. Theta set to 0.0 for higher accuracy (but lower speed)
+                                    # PCA and max_iter are set as in Capper et al. paper
+tsne_df <- tsne$Y %>% as.data.frame() %>% rownames_to_column("Sample_Name")
+tsne_df$Sample_Name <- c(rownames(meth_combat_pca))
+tsne_df <- left_join(tsne_df, meta_data, by="Sample_Name")
+
+
+cowplot::plot_grid(
+  ggplot(tsne_df, aes(x=V1, y=V2, color=Technology))+
+  xlab("tSNE1") + ylab("tSNE2")+
+    geom_point(), 
+  
+  ggplot(tsne_df, aes(x=V1, y=V2, color=CC_Epi_newLRO))+
+    xlab("tSNE1") + ylab("tSNE2")+
+  geom_point(), 
+  
+  ggplot(tsne_df, aes(x=V1, y=V2, color=MEN1))+
+    xlab("tSNE1") + ylab("tSNE2")+
+  geom_point(), 
+  
+  ggplot(tsne_df, aes(x=V1, y=V2, color=DAXX_ATRX))+
+    xlab("tSNE1") + ylab("tSNE2")+
+  geom_point(), 
+  
+  ggplot(tsne_df, aes(x=V1, y=V2, color=Grade))+
+    xlab("tSNE1") + ylab("tSNE2")+
+  geom_point(), 
+  
+  ggplot(tsne_df, aes(x=V1, y=V2, color=MCT4_max))+
+    xlab("tSNE1") + ylab("tSNE2")+
+  geom_point(), ncol =2, align = "v"
+)
+```
+
+
+```{r quantification of nromalization effect}
+
+getNormQual = function(norm_data,
+                       raw_data){
+  # this function is taken from the wateRmelon package (qual)
+  # The na.rm = T settings are removed to have the function give an error if there are NAs
+  # difference between normalized and raw
+  stopifnot(all.equal(colnames(norm_data), colnames(raw_data)))
+  dif  = norm_data - raw_data
+  # root mean square deviation
+  rmsd = sqrt(colMeans(dif^2))
+  sdd  = apply(dif, 2, sd)
+  sadd = apply(abs(dif), 2, sd)
+  srms = rmsd/sdd
+  data.frame(Sample_Name = colnames(norm_data),
+             rmsd,
+             sdd,
+             sadd,
+             srms)
+}
+ 
+```
+
+ 
+
+```{r normalization violence, fig.height = 3.5, fig.width = 4.5}
+norm_qual <- getNormQual(meth_norm, meth_combat_beta)
+#detach("package:factoextra", unload=TRUE)
+require(ggrepel)
+require(ggplot2)
+cowplot::plot_grid(
+  left_join(meta_data,
+            norm_qual,
+            by = "Sample_Name") %>%
+    ggplot(aes(x = rmsd,
+               y = sdd,
+               label = Sample_Name,
+               color= Technology)) +
+    geom_point(size = 3,
+               alpha = 0.75) +
+    geom_text_repel() +
+    scale_color_brewer(palette = "Set1") +
+    theme_classic() +
+    labs(title = "NOOB + BMIQ")
+)
+
+```
+
+# Classifier development
+```{r}
+rm(list = ls())
+require(randomForest)
+
+load("./results/rf.pred.RData")
+if (!exists("meta_data"))
+  meta_data <- read.table(file = "./data/meta_data/training_meta_data.txt", sep = "\t", header = T)
+if (!exists("meth_combat_beta"))
+  meth_combat_beta <- as.data.frame(readRDS("./data/results/meth_combat_beta.Rds"))
+
+```
+
+# Classifier cross-validation
+Batch effect was NOT taken into account here !
+```{r,echo=FALSE,message=FALSE,error=FALSE,warning=FALSE,fig.height=4,fig.width=12}
+rm(list=ls())
+library(pROC)
+library(HandTill2001)
+source(file.path("scripts", "R","multi_brier.R"))
+source(file.path("scripts", "R","multi_logloss.R"))
+
+load(file.path("results","CVresults.RData"))
+
+AUCscores <- HandTill2001::auc(multcap(response=as.factor(y),predicted=scores))
+AUCprobs <-  HandTill2001::auc(multcap(response=as.factor(y),predicted=probs))
+
+errs <- sum(y!=ys)/length(y)
+errp <- sum(y!=yp)/length(y)
+
+briers <- brier(scores,y)
+brierp <- brier(probs,y) 
+
+logls <- mlogloss(scores,y)
+loglp <- mlogloss(probs,y) 
+
+out <- cbind(c(AUCscores,AUCprobs),c(errs,errp),c(briers,brierp),c(logls,loglp))
+colnames(out) <- c("auc","misclassification","brier score","logloss")
+rownames(out) <- c("raw scores","calibrated scores")
+
+y.true <- y
+y.score <- ys
+y.calibrated <- yp
+out
+```
+
+```{r}
+table(y.true,y.score)
+table(y.true,y.calibrated)
+```
+
+```{r, fig.height=10}
+par(mfrow=c(3, 2))
+for(i in 1:ncol(scores)){
+  plot(x=scores[,i],y=probs[,i],ylim=c(0,1),pch=16,xlim=c(0,1),col=as.factor((y==colnames(scores)[i])),main=colnames(scores)[i] ,xlab="scores",ylab="calibrated scores")
+  abline(a=0,b=1,col="green",lty=2)
+}
+```
+
+```{r}
+require(ggplot2)
+require(ggridges)
+raw_score <- as.data.frame(scores)
+raw_score["predicted"] <- as.vector(y.score)
+raw_score["CC_Epi_newLRO"] <- as.vector(y)
+raw_score <- raw_score[raw_score$predicted == raw_score$CC_Epi_newLRO, ]
+
+yl <- c()
+for (i in 1:nrow(raw_score)) {
+  x <- raw_score[i, 'predicted']
+  yl <- append(yl, raw_score[i, x])
+}
+raw_score["max"] <- yl
+rm(yl, x)
+
+# plot the raw scores
+raw <- ggplot(raw_score, aes(x = max, y = CC_Epi_newLRO, fill = CC_Epi_newLRO)) +
+  ggtitle("Raw scores for correctly classified cases") +
+  xlim(0,1.2) +
+  geom_density_ridges() +
+  theme_ridges() + 
+  theme(legend.position = "none")
+```
+
+```{r}
+require(ggplot2)
+require(ggridges)
+calibrated_score <- as.data.frame(probs)
+calibrated_score["predicted"] <- as.vector(y.calibrated)
+calibrated_score["CC_Epi_newLRO"] <- as.vector(y)
+calibrated_score <- calibrated_score[calibrated_score$predicted == calibrated_score$CC_Epi_newLRO, ]
+
+yl <- c()
+for (i in 1:nrow(calibrated_score)) {
+  x <- calibrated_score[i, 'predicted']
+  yl <- append(yl, calibrated_score[i, x])
+}
+calibrated_score["max"] <- yl
+rm(yl, x)
+
+# plot the raw scores
+calibrated <- ggplot(calibrated_score, aes(x = max, y = CC_Epi_newLRO, fill = CC_Epi_newLRO)) +
+  xlim(0,1.2) +
+  ggtitle("Calibrated scores for correctly classified cases") +
+  geom_density_ridges() +
+  theme_ridges() + 
+  theme(legend.position = "none")
+```
+
+
+
+```{r, fig.width=10}
+cowplot::plot_grid(
+  raw, 
+  calibrated,
+  ncol = 1)
+
+```
