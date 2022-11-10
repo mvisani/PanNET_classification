@@ -11,3 +11,4 @@ data/raw_data/training_EPIC.Rds
 data/results/20221017_meth_combat_beta.Rds
 data/results/meth_normalized.Rds
 meth_normalized.txt
+.Rproj.user

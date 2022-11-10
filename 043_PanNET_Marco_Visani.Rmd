@@ -377,6 +377,48 @@ for (i in 1:length(final_forest)) {
 
 ```
 
+#test
+```{r}
+require(randomForest)
+require(doParallel)
+forest.classifier.test <- function(x, response, i=NA, ntrees){
+  require(randomForest)
+  forest <- randomForest(x=t(x),
+                            y=response,
+                            mtry = floor(sqrt(nrow(x))),
+                            ntree = ntrees,
+                            sampsize = rep(min(table(response)),length(table(response))), 
+                            importance = T
+                            )
+  
+  i <- forest
+  return(i)
+}
+
+no_cores <- detectCores() - 1
+cl <- makeCluster(no_cores)
+registerDoParallel(cl)
+final_forest <- foreach(i=1:100) %dopar% forest.classifier.test(x=meth_combat_beta,
+                                                         response=as.factor(meta_data$CC_Epi_newLRO),
+                                                         i,
+                                                         ntrees = 100)
+stopCluster(cl)
+test <- do.call(randomForest::combine, final_forest)
+test <- importance(test, type = 1)
+or <- order(test,decreasing=T)
+betasy <- meth_combat_beta[or[1:10000],]
+
+final_forest <- randomForest(t(betasy), 
+                             y=as.factor(meta_data$CC_Epi_newLRO), 
+                             mtry = 100,
+                             ntree = 10000, 
+                             sampsize = rep(10,5),
+                             importance = TRUE
+                             )
+```
+
+
+
 
 ```{r}
 gini_ranked <- matrix(data = NA, nrow = nrow(meth_combat_beta), ncol = 100)
@@ -424,9 +466,9 @@ accuracy_ranked <- accuracy_ranked[order(-accuracy_ranked$V101), ]
 accuracy_important_probes <- rownames(accuracy_ranked)
 accuracy_important_probes <- accuracy_important_probes[1:10000]
 
-gini_ranked <- gini_ranked[order(-gini_ranked$V101), ]
-gini_important_probes <- rownames(gini_ranked)
-gini_important_probes <- gini_important_probes[1:10000]
+#gini_ranked <- gini_ranked[order(-gini_ranked$V101), ]
+#gini_important_probes <- rownames(gini_ranked)
+#gini_important_probes <- gini_important_probes[1:10000]
 
 ```
 
@@ -524,7 +566,7 @@ for (i in 1:nrow(raw_score)) {
 raw_score["max"] <- y
 rm(y, x)
 
-# basic example
+# plot the raw scores
 ggplot(raw_score, aes(x = max, y = CC_Epi_newLRO, fill = CC_Epi_newLRO)) +
   geom_density_ridges() +
   theme_ridges() + 
@@ -570,9 +612,74 @@ for (i in names(coefficients)) {
 
 ```
 
+```{r}
+makefolds <- function(y,cv.fold=3){
+  n <- length(y)
+  nlvl <- table(y)
+  idx <- numeric(n)
+  folds <- list()
+  for (i in 1:length(nlvl)) {
+    idx[which(y == levels(y)[i])] <- sample(rep(1:cv.fold,length = nlvl[i]))
+  }
+  for (i in 1:cv.fold){
+    folds[[i]] <- list(train = which(idx!=i),
+                       test =  which(idx==i)) 
+  }  
+  return(folds)
+}
+makenestedfolds <- function(y,cv.fold=3){
+  nfolds <- list()
+  folds <- makefolds(y,cv.fold)
+  names(folds) <- paste0("outer",1:length(folds))
+  for(k in 1:length(folds)){
+    inner = makefolds(y[folds[[k]]$train],cv.fold)
+    names(inner) <- paste0("inner",1:length(folds))
+    for(i in 1:length(inner)){
+      inner[[i]]$train <- folds[[k]]$train[inner[[i]]$train]
+      inner[[i]]$test <- folds[[k]]$train[inner[[i]]$test]
+    }
+    nfolds[[k]] <- list(folds[k],inner) 
+  }
+  names(nfolds) <- paste0("outer",1:length(nfolds))
+  return(nfolds)
+}
+```
 
 ```{r}
-require(DescTools)
-BrierScore(accuracy_ridge)
+nfolds <- makenestedfolds(meta_data$CC_Epi_newLRO)
+
+for(i in 1:length(nfolds)){
+  scores <- list() 
+  idx <- list()
+  for(j in 1:length(nfolds)){
+    fname <- paste0("CVfold.",i,".",j,".RData")
+    load(file.path("CV",fname))
+    scores[[j]] <- rf.scores
+    idx[[j]] <- nfolds[[i]][[2]][[j]]$test
+  }
+  scores <- do.call(rbind,scores)
+  idx <- unlist(idx)
+  y <- anno$`methylation class:ch1`[idx]         
+  
+  message("fitting calbriation model fold ",i," ...",Sys.time())
+  # fit multinomial logistic ridge regression model
+  suppressWarnings(cv.calfit <- cv.glmnet(y=y,x=scores,family="multinomial",type.measure="mse",
+                                          alpha=0,nlambda=100,lambda.min.ratio=10^-6,parallel=TRUE))
+  
+  fname <- paste0("CVfold.",i,".",0,".RData")
+  load(file.path("CV",fname))
+  
+  message("calibrating raw scores fold ",i," ...",Sys.time())
+  probs <- predict(cv.calfit$glmnet.fit,newx=rf.scores,type="response"
+                   ,s=cv.calfit$lambda.1se)[,,1] # use lambda estimated by 10fold CVlambda
+  
+  
+  err <- sum(colnames(probs)[apply(probs,1,which.max)] != anno$`methylation class:ch1`[nfolds[[i]][[1]][[1]]$test])/length(nfolds[[i]][[1]][[1]]$test)
+  
+  message("misclassification error: ",err)
+  
+  fname_probs <- paste0("probsCVfold.",i,".",0,".RData")
+  save(probs,file=file.path("CV",fname_probs))
+}
 ```
 
