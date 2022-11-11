@@ -20,7 +20,7 @@ library(limma)
 ntrees <- 10000
 cores <- detectCores() - 1
 seed <- 180314
-p <- 10000
+p <- 125
 folds <- 3
 
 #message("loading filtered Mset ...",Sys.time())
@@ -31,9 +31,9 @@ folds <- 3
 
 #load(file.path("results","betas.ba.RData"))
 if (!exists("betas"))
-  betas <- readRDS("./data/results/meth_combat_beta.Rds")
+  betas <- readRDS("../data/results/meth_combat_beta.Rds")
 if (!exists("meta_data"))
-  meta_data <- read.table(file = "./data/meta_data/training_meta_data.txt", sep = "\t", header = T)
+  meta_data <- read.table(file = "../data/meta_data/training_meta_data.txt", sep = "\t", header = T)
 
 y <- as.factor(meta_data$CC_Epi_newLRO)
 batch <- as.factor(meta_data$Technology)
@@ -43,12 +43,12 @@ source(file.path("R","train.R"))
 source(file.path("R","calculateCVfold.R"))
 source(file.path("R","batchadjust.R"))
 
-if(!file.exists(file.path("..", "CV","nfolds.RData"))){
-  dir.create("CV",showWarnings = FALSE)
+if(!file.exists(file.path("..", "CV_125","nfolds.RData"))){
+  dir.create("../CV_125",showWarnings = FALSE)
   nfolds <- makenestedfolds(y,folds)
-  save(nfolds,file=file.path("CV","nfolds.RData"))
+  save(nfolds,file=file.path("..","CV_125","nfolds.RData"))
 }
-load(file.path(".." ,"CV","nfolds.RData"))
+load(file.path(".." ,"CV_125","nfolds.RData"))
 
 message("performing nested CV ...", Sys.time())
 message("check minimal class sizes for inner training loops")
@@ -77,7 +77,7 @@ for(K in 1:folds){
     rf.scores <- calcultateCVfold(betas,y,batch,fold,p,cores,ntrees)
     
     fname <- paste("CVfold",K,k,"RData",sep=".")
-    save(rf.scores,file=file.path("..", "CV",fname))
+    save(rf.scores,file=file.path("..", "CV_125",fname))
     
     rm(rf.scores)
     gc()
