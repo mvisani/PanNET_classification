@@ -1,5 +1,5 @@
 ---
-title: "CV results"
+title: "CV_125 results"
 output: html_document
 ---
 
@@ -10,7 +10,7 @@ library(HandTill2001)
 source(file.path("R","multi_brier.R"))
 source(file.path("R","multi_logloss.R"))
 
-load(file.path("..", "results","CVresults.RData"))
+load(file.path("..", "results","CVresults_125.RData"))
 
 AUCscores <- HandTill2001::auc(multcap(response=as.factor(y),predicted=scores))
 AUCprobs <-  HandTill2001::auc(multcap(response=as.factor(y),predicted=probs))

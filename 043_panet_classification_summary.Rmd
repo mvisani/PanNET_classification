@@ -9,11 +9,19 @@ output:
 
 
 # Introduction
+Data received was of RGChannelSetExtended formal class. NOOB was run for both 450 and EPIC data. In order to include as much data as possible, low p value probes and low bead count probes were also included. Legacy probes were removed (total of 997 probes). The probes were sorted by probe name. Data was converted to beta values. Taking the intersect between the probe names of EPIC and 450K technology and the then data was joined together. Beta values were then normalized using `champ.norm`function. 
+
+Normalized beta values were converted back to M values. Data was adjusted for batch effect on the `Slide` using ComBat. Values were then converted back to beta values. 
+
+QC was then performed (see below).  
 
 # Quality control 
+Surrogate variables, PCA and t-SNE were checked. 
+
 ## Check for surrogate variables
+First we checked for surrogate variables. None were found. 
 ```{r}
-rm(list = ls())
+#rm(list = ls())
 if(!exists("meta_data"))
   meta_data <- read.table("./data/meta_data/training_meta_data.txt", sep = "\t", header = T)
 if(!exists("meth_combat_M"))
@@ -22,18 +30,10 @@ if(!exists("meth_combat_beta"))
   meth_combat_beta <- as.data.frame(readRDS("./data/results/meth_combat_beta.Rds"))
 if (!exists("meth_norm"))
   meth_norm <- as.data.frame(readRDS("./data/results/meth_normalized.Rds"))
-
-require(sva)
-sva_model <- model.matrix(~ CC_Epi_newLRO, data = meta_data)
-sva_model_zero <- model.matrix(~ 1, data = meta_data)
-meth_sva <- sva::sva(dat = meth_combat_M, 
-                            mod = sva_model,
-                            mod0 = sva_model_zero, 
-                            n.sv = 42) #42 found by running it without this parameter (takes a while)
 ```
 
-## Do surrogate variable describe any known variable ?
 ```{r, fig.width = 14}
+load(file = "./data/results/surrogate_var.RData")
 require(ggplot2)
 require(dplyr)
 #this part will tell if the surrogate variables are descibing other varibales of the dataset
@@ -79,6 +79,7 @@ bind_rows(SVList) %>%
 
 
 ## PCA
+PCA tries to preserve the Global Structure of data i.e when converting d-dimensional data to d’-dimensional data then it tries to map all the clusters as a whole due to which local structures might get lost. That is why we also checked with t-SNE. 
 ```{r, fig.height=10}
 require(fafreqs)
 require(tibble)
@@ -121,7 +122,7 @@ cowplot::plot_grid(
 )
 
 ```
-
+We can't see any pattern. Maybe a small one for the Intermidiate_ADM probes classified by the consensus cluster (bottom left image). 
 
 ## t-SNE
 ```{r, fig.height=10}
@@ -162,7 +163,7 @@ cowplot::plot_grid(
   geom_point(), ncol =2, align = "v"
 )
 ```
-
+Again there seems to be no significant cluster. Maybe Beta-like samples are a little bit isolated 
 
 ```{r quantification of nromalization effect}
 

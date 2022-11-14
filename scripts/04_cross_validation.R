@@ -31,9 +31,9 @@ folds <- 3
 
 #load(file.path("results","betas.ba.RData"))
 if (!exists("betas"))
-  betas <- readRDS("./data/results/meth_combat_beta.Rds")
+  betas <- readRDS("../data/results/meth_combat_beta.Rds")
 if (!exists("meta_data"))
-  meta_data <- read.table(file = "./data/meta_data/training_meta_data.txt", sep = "\t", header = T)
+  meta_data <- read.table(file = "../data/meta_data/training_meta_data.txt", sep = "\t", header = T)
 
 y <- as.factor(meta_data$CC_Epi_newLRO)
 batch <- as.factor(meta_data$Technology)

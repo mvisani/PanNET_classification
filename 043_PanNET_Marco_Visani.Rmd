@@ -773,3 +773,72 @@ cowplot::plot_grid(
 
 ```
 
+```{r Cross-validation for 10000 best probes}
+rm(list=ls())
+if(!exists("meta_data"))
+  meta_data <- read.table("./data/meta_data/training_meta_data.txt", sep = "\t", header = T)
+
+if(!exists("meth_combat_beta"))
+  meth_combat_beta <- as.data.frame(readRDS("./data/results/meth_combat_beta.Rds"))
+load(file = "./CV/nfolds.RData")
+load(file = "./results/varsel.RData")
+require(randomForest)
+
+imp.meandecrease <- importance(rf.varsel, type=1)
+or <- order(imp.meandecrease,decreasing=T)
+
+for (i in 1:length(nfolds)){
+  samp <- nfolds[[i]][[1]][[1]][["train"]]
+  cv_10000 <- rfcv(trainx = t(meth_combat_beta[or[1:10000], samp]), 
+       trainy = as.factor(meta_data$CC_Epi_newLRO[samp]), 
+       cv.fold = 3, ntree =1000)
+  with(cv_10000, plot(n.var, error.cv, log="x", type="o", lwd=2, ylim=c(0,1)))
+}
+```
+
+```{r Cross validation for 1000 best probes}
+rm(list=ls())
+if(!exists("meta_data"))
+  meta_data <- read.table("./data/meta_data/training_meta_data.txt", sep = "\t", header = T)
+
+if(!exists("meth_combat_beta"))
+  meth_combat_beta <- as.data.frame(readRDS("./data/results/meth_combat_beta.Rds"))
+load(file = "./CV/nfolds.RData")
+load(file = "./results/varsel.RData")
+require(randomForest)
+
+imp.meandecrease <- importance(rf.varsel, type=1)
+or <- order(imp.meandecrease,decreasing=T)
+
+for (i in 1:length(nfolds)){
+  samp <- nfolds[[i]][[1]][[1]][["train"]]
+  cv_10000 <- rfcv(trainx = t(meth_combat_beta[or[1:1000], samp]), 
+       trainy = as.factor(meta_data$CC_Epi_newLRO[samp]), 
+       cv.fold = 3, ntree =1000)
+  with(cv_10000, plot(n.var, error.cv, log="x", type="o", lwd=2, ylim=c(0,1)))
+}
+```
+
+```{r Cross val for 500 best probes}
+rm(list=ls())
+if(!exists("meta_data"))
+  meta_data <- read.table("./data/meta_data/training_meta_data.txt", sep = "\t", header = T)
+
+if(!exists("meth_combat_beta"))
+  meth_combat_beta <- as.data.frame(readRDS("./data/results/meth_combat_beta.Rds"))
+load(file = "./CV/nfolds.RData")
+load(file = "./results/varsel.RData")
+require(randomForest)
+
+imp.meandecrease <- importance(rf.varsel, type=1)
+or <- order(imp.meandecrease,decreasing=T)
+
+for (i in 1:length(nfolds)){
+  samp <- nfolds[[i]][[1]][[1]][["train"]]
+  cv_10000 <- rfcv(trainx = t(meth_combat_beta[or[1:500], samp]), 
+       trainy = as.factor(meta_data$CC_Epi_newLRO[samp]), 
+       cv.fold = 3, ntree =1000)
+  with(cv_10000, plot(n.var, error.cv, log="x", type="o", lwd=2, ylim=c(0,1)))
+}
+```
+

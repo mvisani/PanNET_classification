@@ -7,7 +7,7 @@ library(readr)
 library(base)
 library(doParallel)
 source("ChAMP_functions_Lionel_Philipp_220727.R")
-setwd("..")
+#setwd("..")
 
 #load epic data
 path_epic <- "./data/raw_data/training_EPIC.Rds"
@@ -44,8 +44,8 @@ meth_epic.beta <- getBeta(meth_epic$mset, "Illumina")[row_names_epic, ]
 rm(meth_epic, row_names_epic) #remove data that we don't need anymore... (to test)
 gc()
 
-mainDir <- getwd()
+mainDir <- ".."
 subDir <- "pre_process"
 dir.create(file.path(mainDir, subDir))
-save(meth_epic.beta,file=file.path("pre_process","00_epic_beta.RData"))
+save(meth_epic.beta,file=file.path("..","pre_process","00_epic_beta.RData"))
 

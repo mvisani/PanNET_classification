@@ -6,7 +6,7 @@ library(minfi)
 library(readr)
 library(base)
 source("ChAMP_functions_Lionel_Philipp_220727.R")
-setwd("..")
+#setwd("..")
 
 # 450k pre-process
 path_450k <- "./data/raw_data/training_450K.Rds"
@@ -38,7 +38,7 @@ row_names_450 <- sort(rownames(meth_450$mset))
 meth_450.beta <- getBeta(meth_450$mset, "Illumina")[row_names_450, ]
 rm(meth_450, row_names_450)
 
-mainDir <- getwd()
+mainDir <- ".."
 subDir <- "pre_process"
 dir.create(file.path(mainDir, subDir))
-save(meth_450.beta,file=file.path("pre_process","00_450_beta.RData"))
+save(meth_450.beta,file=file.path("..","pre_process","00_450_beta.RData"))
