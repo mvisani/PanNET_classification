@@ -12,3 +12,6 @@ data/results/20221017_meth_combat_beta.Rds
 data/results/meth_normalized.Rds
 meth_normalized.txt
 .Rproj.user
+*.RData
+*.Rds
+data/legacy_probes/MethylationEPIC Missing Legacy CpG (v1.0_B3 vs. v1.0_B2).txt.gz
