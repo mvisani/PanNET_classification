@@ -9,6 +9,7 @@ output:
 
 
 # Introduction
+
 Data received was of RGChannelSetExtended formal class. NOOB was run for both 450 and EPIC data. In order to include as much data as possible, low p value probes and low bead count probes were also included. Legacy probes were removed (total of 997 probes). The probes were sorted by probe name. Data was converted to beta values. Taking the intersect between the probe names of EPIC and 450K technology and the then data was joined together. Beta values were then normalized using `champ.norm`function. 
 
 Normalized beta values were converted back to M values. Data was adjusted for batch effect on the `Slide` using ComBat. Values were then converted back to beta values. 
@@ -45,9 +46,9 @@ SVList = as.list(rep(NA, times = sum(grepl("SV", colnames(methSV)))))
 for (sv in seq_along(SVList)){
   SVList[[sv]] = lapply(colnames(meta_data), function(var){
     if(is.numeric(methSV[[var]]))
-      test_res = summary(lm(as.formula(paste0(var, "~ SV", sv)), data = methSV))$coef[2,4]
+      test_res = summary(lm(as.formula(paste0("SV", sv,"~", var)), data = methSV))$coef[2,4]
     else
-      test_res = kruskal.test(as.formula(paste0(var, "~ SV", sv)), data = methSV)$p.value
+      test_res = kruskal.test(as.formula(paste0("SV", sv,"~", var)), data = methSV)$p.value
     data.frame(variable = var,
                pval = test_res,
                SV = paste0("SV", sv))
@@ -59,7 +60,7 @@ bind_rows(SVList) %>%
   mutate(pval_bin = cut(-log10(pval), 
                         breaks = c(0, -log10(0.05), 2, 5, 10, 300), 
                         labels = c("a", "b", "c", "d", "e"), 
-                        include.lowest = T)) %>% 
+                        include.lowest = T), SV = factor(SV, levels=paste0("SV", 1:42))) %>% 
   ggplot(aes(x = SV, y = variable, fill = pval_bin)) + 
   geom_tile() + 
   coord_fixed() + 
@@ -83,7 +84,8 @@ PCA tries to preserve the Global Structure of data i.e when converting d-dimensi
 ```{r, fig.height=10}
 require(fafreqs)
 require(tibble)
-probevar <- rowVars(meth_combat_M)
+#probevar <- rowVars(meth_combat_M)
+probevar <- apply(meth_combat_M, 1, var)
 probevar <- order(probevar, decreasing = T)
 
 meth_combat_pca <- meth_combat_M[probevar[1:30000],meta_data$Sample_Name] #30000 is an arbitrary number --> look at paper on brain tumors (they took 32000)
@@ -103,7 +105,8 @@ pca_eig = factoextra::get_eigenvalue(pca_result)
 
 cowplot::plot_grid(
   ggplot(pca_df, aes(color=Technology, x=PC1, y=PC2))+
-    geom_point(),
+    geom_point()+labs(x=paste0("PC1 ", pca_eig$variance.percent[1]), 
+                       y=paste0("PC2 ", pca_eig$variance.percent[2])),
   
   ggplot(pca_df, aes(color=MEN1, x=PC1, y=PC2))+
     geom_point(),
@@ -125,7 +128,7 @@ cowplot::plot_grid(
 We can't see any pattern. Maybe a small one for the Intermidiate_ADM probes classified by the consensus cluster (bottom left image). 
 
 ## t-SNE
-```{r, fig.height=10}
+```{r, fig.height=10, fig.width=14}
 require(Rtsne)
 require(RColorBrewer)
 set.seed(123) # setting a fixed seed allows reproducibility 

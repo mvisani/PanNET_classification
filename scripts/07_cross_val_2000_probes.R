@@ -20,7 +20,7 @@ library(limma)
 ntrees <- 10000
 cores <- detectCores() - 1
 seed <- 180314
-p <- 125
+p <- 2000
 folds <- 3
 
 #message("loading filtered Mset ...",Sys.time())
@@ -43,12 +43,12 @@ source(file.path("R","train.R"))
 source(file.path("R","calculateCVfold.R"))
 source(file.path("R","batchadjust.R"))
 
-if(!file.exists(file.path("..", "CV_125","nfolds.RData"))){
-  dir.create("../CV_125",showWarnings = FALSE)
+if(!file.exists(file.path("..", "CV_2000","nfolds.RData"))){
+  dir.create("../CV_2000",showWarnings = FALSE)
   nfolds <- makenestedfolds(y,folds)
-  save(nfolds,file=file.path("..","CV_125","nfolds.RData"))
+  save(nfolds,file=file.path("..","CV_2000","nfolds.RData"))
 }
-load(file.path(".." ,"CV_125","nfolds.RData"))
+load(file.path(".." ,"CV_2000","nfolds.RData"))
 
 message("performing nested CV ...", Sys.time())
 message("check minimal class sizes for inner training loops")
@@ -77,7 +77,7 @@ for(K in 1:folds){
     rf.scores <- calcultateCVfold(betas,y,batch,fold,p,cores,ntrees)
     
     fname <- paste("CVfold",K,k,"RData",sep=".")
-    save(rf.scores,file=file.path("..", "CV_125",fname))
+    save(rf.scores,file=file.path("..", "CV_2000",fname))
     
     rm(rf.scores)
     gc()

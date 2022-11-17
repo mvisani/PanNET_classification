@@ -787,16 +787,21 @@ require(randomForest)
 imp.meandecrease <- importance(rf.varsel, type=1)
 or <- order(imp.meandecrease,decreasing=T)
 
+plot(NA, ylim=c(0,1), xlim=c(1,10000),log="x", xlab="n.probes", ylab="error.cv",
+     main="Cross validation on top 10'000 probes")
 for (i in 1:length(nfolds)){
   samp <- nfolds[[i]][[1]][[1]][["train"]]
-  cv_10000 <- rfcv(trainx = t(meth_combat_beta[or[1:10000], samp]), 
-       trainy = as.factor(meta_data$CC_Epi_newLRO[samp]), 
-       cv.fold = 3, ntree =1000)
-  with(cv_10000, plot(n.var, error.cv, log="x", type="o", lwd=2, ylim=c(0,1)))
+  cv <- rfcv(trainx = t(meth_combat_beta[or[1:10000], samp]),
+                   trainy = as.factor(meta_data$CC_Epi_newLRO[samp]), 
+                   cv.fold = 3,
+                   ntree =500)
+  with(cv, lines(n.var, error.cv, type="o", lwd=2, col=i))
 }
+cv_10000 <- recordPlot()
+save(cv_10000, file="./results/CV_plot_10000.RData")
 ```
 
-```{r Cross validation for 1000 best probes}
+```{r Cross validation for 2000 best probes}
 rm(list=ls())
 if(!exists("meta_data"))
   meta_data <- read.table("./data/meta_data/training_meta_data.txt", sep = "\t", header = T)
@@ -810,17 +815,23 @@ require(randomForest)
 imp.meandecrease <- importance(rf.varsel, type=1)
 or <- order(imp.meandecrease,decreasing=T)
 
+plot(NA, ylim=c(0,1), xlim=c(1,5000),log="x", xlab="n.probes", ylab="error.cv",
+      main="Cross validation on top 2'000 probes")
 for (i in 1:length(nfolds)){
   samp <- nfolds[[i]][[1]][[1]][["train"]]
-  cv_10000 <- rfcv(trainx = t(meth_combat_beta[or[1:1000], samp]), 
+  cv <- rfcv(trainx = t(meth_combat_beta[or[1:2000], samp]), 
        trainy = as.factor(meta_data$CC_Epi_newLRO[samp]), 
-       cv.fold = 3, ntree =1000)
-  with(cv_10000, plot(n.var, error.cv, log="x", type="o", lwd=2, ylim=c(0,1)))
+       cv.fold = 3, ntree =500)
+  with(cv, lines(n.var, error.cv, type="o", lwd=2, col=i))
 }
+cv_2000 <- recordPlot()
+save(cv_2000, file="./results/CV_plot_2000.RData")
+
 ```
 
-```{r Cross val for 500 best probes}
+```{r Cross val for 1000 best probes}
 rm(list=ls())
+require(ggplot2)
 if(!exists("meta_data"))
   meta_data <- read.table("./data/meta_data/training_meta_data.txt", sep = "\t", header = T)
 
@@ -833,12 +844,15 @@ require(randomForest)
 imp.meandecrease <- importance(rf.varsel, type=1)
 or <- order(imp.meandecrease,decreasing=T)
 
+plot(NA, ylim=c(0,1), xlim=c(1,10000),log="x", xlab="n.probes", ylab="error.cv",
+     main="Cross validation on top 1'000 probes")
 for (i in 1:length(nfolds)){
   samp <- nfolds[[i]][[1]][[1]][["train"]]
-  cv_10000 <- rfcv(trainx = t(meth_combat_beta[or[1:500], samp]), 
+  cv <- rfcv(trainx = t(meth_combat_beta[or[1:1000], samp]), 
        trainy = as.factor(meta_data$CC_Epi_newLRO[samp]), 
-       cv.fold = 3, ntree =1000)
-  with(cv_10000, plot(n.var, error.cv, log="x", type="o", lwd=2, ylim=c(0,1)))
+       cv.fold = 3, ntree =500)
+  with(cv, lines(n.var, error.cv, type="o", lwd=2, col=i))
 }
+cv_1000 <- recordPlot()
+save(cv_1000, file="./results/CV_plot_1000.RData")
 ```
-
