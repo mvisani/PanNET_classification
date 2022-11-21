@@ -5,6 +5,7 @@ date: "`r Sys.Date()`"
 output:
   html_document:
     number_sections: true
+    code_folding: hide
 ---
 
 
@@ -81,7 +82,7 @@ bind_rows(SVList) %>%
 
 ## PCA
 PCA tries to preserve the Global Structure of data i.e when converting d-dimensional data to d’-dimensional data then it tries to map all the clusters as a whole due to which local structures might get lost. That is why we also checked with t-SNE. 
-```{r, fig.height=10}
+```{r, fig.height=10, fig.width=14}
 require(fafreqs)
 require(tibble)
 #probevar <- rowVars(meth_combat_M)
@@ -259,13 +260,126 @@ rownames(out) <- c("raw scores","calibrated scores")
 y.true <- y
 y.score <- ys
 y.calibrated <- yp
-out
 ```
 
+## Consensus clustering 
 ```{r}
-table(y.true,y.score)
-table(y.true,y.calibrated)
+require(pheatmap)
+cons_cluster <- readRDS(file = "./data/raw_data/220609_NDD.consClust_DMP.Rds")
+cons_cluster <- cons_cluster[[5]]
 ```
+
+
+```{r}
+plotCCheatmap = function(ccObject, metaData, previousCC = NULL, colorList){
+  ccHmap = ccObject$consensusMatrix
+  ccDist = ccObject$consensusTree
+  ccDist_rev = ccDist
+  ccDist_rev$order = rev(ccDist_rev$order)
+  
+  attr(ccHmap, "dimnames") = list(names(ccObject$consensusClass),
+                                names(ccObject$consensusClass))
+  
+  metaData = as.data.frame(metaData)
+  if(all.equal(rownames(metaData), as.character(seq_len(nrow(metaData)))))
+    rownames(metaData) = metaData$Sample_Name
+  metaData = metaData %>% 
+    dplyr::select(-Sample_Name) 
+  if(!is.null(previousCC))
+    metaData[[previousCC]][is.na(metaData[[previousCC]])] = "new_sample"
+  
+  pheatmap(ccHmap,
+           scale = "none",
+           color = colorRampPalette(c("white", "blue"))(100),
+           cluster_rows = ccDist_rev,
+           cluster_cols = ccDist,
+           show_rownames = F,
+           show_colnames = F,
+           cellheight = 2,
+           cellwidth = 2,
+           annotation_col = metaData,
+           annotation_colors = colorList)
+}
+```
+
+```{r heatmap 5 clusters, fig.height = 10, fig.width = 14}
+meta_data <- read.table(file = "./data/meta_data/training_meta_data.txt", sep = "\t", header = T)
+
+scores_plot <- scores[meta_data$Sample_Name, ]
+meta_data <- cbind(meta_data, colnames(scores_plot)[apply(scores_plot,1,which.max)])
+colnames(meta_data)[which(names(meta_data) == "colnames(scores_plot)[apply(scores_plot, 1, which.max)]")] <- "rf"
+
+#now for the calibrated scores
+probs_plot <- probs[meta_data$Sample_Name, ]
+meta_data <- cbind(meta_data, colnames(probs_plot)[apply(probs_plot,1,which.max)])
+colnames(meta_data)[which(names(meta_data) == "colnames(probs_plot)[apply(probs_plot, 1, which.max)]")] <- "rf_calibrated"
+
+
+plotCCheatmap(cons_cluster, 
+              metaData = meta_data %>% 
+                dplyr::select(Sample_Name, 
+                              Grade, 
+                              DAXX_ATRX, 
+                              MEN1, 
+                              CC_Epi_newLRO,
+                              rf,
+                              rf_calibrated),
+
+              colorList = list(Grade = c(G1 = "khaki", G2 = "blue2"),
+                               DAXX_ATRX = c(wt = "white", mut = "goldenrod4"),
+                               MEN1 = c(wt = "white", mut = "goldenrod1"),
+                               ConsClus_k4_UB_UCL_ICGC_Chan = c(Alpha_like = "dodgerblue4",
+                                                                Beta_like = "sienna3",
+                                                                Intermediate_ADM = "lightskyblue1",
+                                                                Intermediate_WT = "darksalmon",
+                                                                new_sample = "yellow"),
+                               CC_Epi_newLRO = c(Alpha_like = "dodgerblue4",
+                                                 Beta_like = "sienna3",
+                                                 Intermediate_ADM = "lightskyblue1",
+                                                 Intermediate_ADM_WT = "hotpink3",
+                                                 Intermediate_WT = "darksalmon"),
+                               rf = c(Alpha_like = "dodgerblue4",
+                                                 Beta_like = "sienna3",
+                                                 Intermediate_ADM = "lightskyblue1",
+                                                 Intermediate_ADM_WT = "hotpink3",
+                                                 Intermediate_WT = "darksalmon"), 
+                               rf_calibrated = c(Alpha_like = "dodgerblue4",
+                                                 Beta_like = "sienna3",
+                                                 Intermediate_ADM = "lightskyblue1",
+                                                 Intermediate_ADM_WT = "hotpink3",
+                                                 Intermediate_WT = "darksalmon")))
+```
+
+
+## Confusion matrix
+After training of the classifier with the top 10'000 probes, the random forest algorithm classified the samples as follows. 
+Questions: 
+\item Is the meta data actually the grand truth ? 
+\item Should the wrongly classified samples be looked again ? 
+\item ... 
+
+```{r}
+if (!exists("rf.pred"))
+  load(file = "./results/rf.pred.RData")
+
+m <- rf.pred$confusion[, -ncol(rf.pred$confusion)]
+m <- m/apply(m, 1, sum)
+
+pheatmap(m,
+         display_numbers = rf.pred$confusion[, -ncol(rf.pred$confusion)],
+         angle_col = 45, treeheight_row = 0,
+         treeheight_col = 0, cluster_rows = F, cluster_cols = F,
+         color=colorRampPalette(c("white", "red"))(100))
+```
+
+Shows confusion matrix as heatmap. Numbers in the cells indicates the number of samples counted in that cell. The color indicates the percentage of samples correctly identified in that class. 
+
+```{r}
+require(kableExtra)
+out %>% kbl %>% kable_styling()
+```
+
+
 
 ```{r, fig.height=10}
 par(mfrow=c(3, 2))
@@ -334,3 +448,5 @@ cowplot::plot_grid(
   ncol = 1)
 
 ```
+
+
