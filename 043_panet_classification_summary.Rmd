@@ -21,11 +21,10 @@ QC was then performed (see below).
 Surrogate variables, PCA and t-SNE were checked. 
 
 ## Check for surrogate variables
-First we checked for surrogate variables. None were found. 
+First we checked for surrogate variables. Some were found but on the variables that we are interested in. If some of the surrogate variables were found on the `Technology` variable for example, this should be a concern. Here, there is nothing to worry about. 
 ```{r}
-#rm(list = ls())
-if(!exists("meta_data"))
-  meta_data <- read.table("./data/meta_data/training_meta_data.txt", sep = "\t", header = T)
+rm(list = ls())
+meta_data <- read.table("./data/meta_data/training_meta_data.txt", sep = "\t", header = T)
 if(!exists("meth_combat_M"))
   meth_combat_M <- readRDS("./data/results/meth_combat_M.Rds")
 if(!exists("meth_combat_beta"))
@@ -79,6 +78,7 @@ bind_rows(SVList) %>%
   labs(title = "SVs vs biological variables")
 ```
 
+Since we have many surrogate variables, there is nothing to worry about on the `Array` variable because the p-value is at 0.01 so there is a small percentage of chance that that SV was just assigned by chance. 
 
 ## PCA
 PCA tries to preserve the Global Structure of data i.e when converting d-dimensional data to d’-dimensional data then it tries to map all the clusters as a whole due to which local structures might get lost. That is why we also checked with t-SNE. 
@@ -106,27 +106,34 @@ pca_eig = factoextra::get_eigenvalue(pca_result)
 
 cowplot::plot_grid(
   ggplot(pca_df, aes(color=Technology, x=PC1, y=PC2))+
-    geom_point()+labs(x=paste0("PC1 ", pca_eig$variance.percent[1]), 
-                       y=paste0("PC2 ", pca_eig$variance.percent[2])),
+    geom_point()+labs(x=paste0("PC1 ", round(pca_eig$variance.percent[1], 2), "%"), 
+                       y=paste0("PC2 ", round(pca_eig$variance.percent[2]), "%")),
   
   ggplot(pca_df, aes(color=MEN1, x=PC1, y=PC2))+
-    geom_point(),
+    geom_point()+labs(x=paste0("PC1 ", round(pca_eig$variance.percent[1], 2), "%"), 
+                       y=paste0("PC2 ", round(pca_eig$variance.percent[2]), "%")),
   
   ggplot(pca_df, aes(color=DAXX_ATRX, x=PC1, y=PC2))+
-    geom_point(),
+    geom_point()+labs(x=paste0("PC1 ", round(pca_eig$variance.percent[1], 2), "%"), 
+                       y=paste0("PC2 ", round(pca_eig$variance.percent[2]), "%")),
   
   ggplot(pca_df, aes(color=Grade, x=PC1, y=PC2))+
-    geom_point(),
+    geom_point()+labs(x=paste0("PC1 ", round(pca_eig$variance.percent[1], 2), "%"), 
+                       y=paste0("PC2 ", round(pca_eig$variance.percent[2]), "%")),
   
   ggplot(pca_df, aes(color=MCT4_max, x=PC1, y=PC2))+
-    geom_point(),
+    geom_point()+labs(x=paste0("PC1 ", round(pca_eig$variance.percent[1], 2), "%"), 
+                       y=paste0("PC2 ", round(pca_eig$variance.percent[2]), "%")),
   
   ggplot(pca_df, aes(color=CC_Epi_newLRO, x=PC1, y=PC2))+
-    geom_point(), ncol =2, align = "v" 
+    geom_point()+labs(x=paste0("PC1 ", round(pca_eig$variance.percent[1], 2), "%"), 
+                       y=paste0("PC2 ", round(pca_eig$variance.percent[2]), "%")),
+  ncol =2, align = "v" 
 )
 
 ```
-We can't see any pattern. Maybe a small one for the Intermidiate_ADM probes classified by the consensus cluster (bottom left image). 
+We can't see any pattern. Maybe a small one for the Intermidiate_ADM probes classified by the `CC_Epi_newLRO` (bottom left image). 
+The two first PCs only describe in total 21\% of the variance, which is quite low.
 
 ## t-SNE
 ```{r, fig.height=10, fig.width=14}
@@ -217,18 +224,10 @@ cowplot::plot_grid(
 
 ```
 
+This is a final "check" to see if the technology used could have a bias in our data. Here we see that the EPIC has the same trend as the 450K indicating that there shouldn't be any bias (for now...). 
+
 # Classifier development
-```{r}
-rm(list = ls())
-require(randomForest)
-
-load("./results/rf.pred.RData")
-if (!exists("meta_data"))
-  meta_data <- read.table(file = "./data/meta_data/training_meta_data.txt", sep = "\t", header = T)
-if (!exists("meth_combat_beta"))
-  meth_combat_beta <- as.data.frame(readRDS("./data/results/meth_combat_beta.Rds"))
-
-```
+The random forest was developped by 
 
 # Classifier cross-validation
 Batch effect was NOT taken into account here !
@@ -314,19 +313,24 @@ probs_plot <- probs[meta_data$Sample_Name, ]
 meta_data <- cbind(meta_data, colnames(probs_plot)[apply(probs_plot,1,which.max)])
 colnames(meta_data)[which(names(meta_data) == "colnames(probs_plot)[apply(probs_plot, 1, which.max)]")] <- "rf_calibrated"
 
+meta_data['groups'] <- !is.na(meta_data$Cell_type_groups)
+meta_data$groups[meta_data$groups == TRUE] <- "UIU"
+meta_data$groups[grep("^aP", meta_data$Sample_Name)] <- "aP"
+meta_data$groups[meta_data$groups==FALSE] <- "Chan"
+
+meta_data["corretly_classified"] <- meta_data$CC_Epi_newLRO==meta_data$rf_calibrated
+
 
 plotCCheatmap(cons_cluster, 
               metaData = meta_data %>% 
                 dplyr::select(Sample_Name, 
-                              Grade, 
                               DAXX_ATRX, 
                               MEN1, 
                               CC_Epi_newLRO,
                               rf,
                               rf_calibrated),
 
-              colorList = list(Grade = c(G1 = "khaki", G2 = "blue2"),
-                               DAXX_ATRX = c(wt = "white", mut = "goldenrod4"),
+              colorList = list(DAXX_ATRX = c(wt = "white", mut = "goldenrod4"),
                                MEN1 = c(wt = "white", mut = "goldenrod1"),
                                ConsClus_k4_UB_UCL_ICGC_Chan = c(Alpha_like = "dodgerblue4",
                                                                 Beta_like = "sienna3",
@@ -348,31 +352,87 @@ plotCCheatmap(cons_cluster,
                                                  Intermediate_ADM = "lightskyblue1",
                                                  Intermediate_ADM_WT = "hotpink3",
                                                  Intermediate_WT = "darksalmon")))
+
+
+
 ```
 
-
-## Confusion matrix
-After training of the classifier with the top 10'000 probes, the random forest algorithm classified the samples as follows. 
-Questions: 
-\item Is the meta data actually the grand truth ? 
-\item Should the wrongly classified samples be looked again ? 
-\item ... 
+The consensus cluster was used to "create" a response to train the random forest algorithm. The image above shows were the samples were classified according to the consensus cluster, the random forest and the random forest after calibration. 
 
 ```{r}
+require(kableExtra)
+table(meta_data$groups,meta_data$corretly_classified) %>% kbl %>% kable_styling()
+```
+
+Table shows the number of correctly classified and wrongly classified of the original cohorts. 
+
+## Confusion matrix
+Questions: 
+
+* Is the consensus clutering and good response ? 
+* Should the wrongly classified samples be looked again clinically ? reanalyzed ? 
+* ... 
+
+After training of the classifier with the top 10'000 probes, the calibrated random forest algorithm classified the samples as follows. 
+```{r}
+require(pheatmap)
 if (!exists("rf.pred"))
   load(file = "./results/rf.pred.RData")
 
-m <- rf.pred$confusion[, -ncol(rf.pred$confusion)]
+m <-table(y.true, y.calibrated)
 m <- m/apply(m, 1, sum)
 
 pheatmap(m,
-         display_numbers = rf.pred$confusion[, -ncol(rf.pred$confusion)],
-         angle_col = 45, treeheight_row = 0,
-         treeheight_col = 0, cluster_rows = F, cluster_cols = F,
+         display_numbers = table(y.true, y.calibrated),
+         angle_col = 45,
+         treeheight_row = 0,
+         treeheight_col = 0,
+         cluster_rows = F,
+         cluster_cols = F,
          color=colorRampPalette(c("white", "red"))(100))
 ```
 
 Shows confusion matrix as heatmap. Numbers in the cells indicates the number of samples counted in that cell. The color indicates the percentage of samples correctly identified in that class. 
+
+Should be read for right to left: there are 6 Intermidiate_ADM that were classified in the Alpha_like class. 
+
+Looking at the 
+
+
+```{r}
+require(pROC)
+require(ggplot2)
+roc_resp <- as.numeric(y.true!=y.calibrated)
+predictor_roc <- apply(probs, 1, max)
+roc_to_plot <- roc(response=roc_resp, predictor=predictor_roc, ci=TRUE, of="se")
+```
+```{r ROC}
+roc_with_ci <- function(obj) {
+  ciobj <- obj$ci
+  dat.ci <- data.frame(x = as.numeric(rownames(ciobj)),
+                       lower = ciobj[, 1],
+                       upper = ciobj[, 3])
+  
+  ggroc(obj) +
+    theme_minimal() +
+    geom_abline(
+      slope = 1,
+      intercept = 1,
+      linetype = "dashed",
+      alpha = 0.7,
+      color = "black"
+    ) + coord_equal() +
+    geom_ribbon(
+      data = dat.ci,
+      aes(x = x, ymin = lower, ymax = upper),
+      fill = "steelblue",
+      alpha = 0.3
+    ) + ggtitle(paste0("AUC : ", obj$auc))
+} 
+
+roc_with_ci(roc_to_plot)
+```
+
 
 ```{r}
 require(kableExtra)
@@ -381,10 +441,25 @@ out %>% kbl %>% kable_styling()
 
 
 
-```{r, fig.height=10}
+```{r, fig.height=10, fig.width = 14}
 par(mfrow=c(3, 2))
 for(i in 1:ncol(scores)){
   plot(x=scores[,i],y=probs[,i],ylim=c(0,1),pch=16,xlim=c(0,1),col=as.factor((y==colnames(scores)[i])),main=colnames(scores)[i] ,xlab="scores",ylab="calibrated scores")
+  abline(a=0,b=1,col="green",lty=2)
+}
+```
+
+
+
+```{r, fig.height=10, fig.width = 14}}
+par(mfrow=c(3, 2))
+for(i in unique(y)){
+  plot(x=scores[ys==i,i],
+       y=probs[ys==i,i],
+       ylim=c(0,1),pch=16,xlim=c(0,1),
+       col=as.factor((yp==ys)),
+       main=i,
+       xlab="scores",ylab="calibrated scores")
   abline(a=0,b=1,col="green",lty=2)
 }
 ```
@@ -448,5 +523,15 @@ cowplot::plot_grid(
   ncol = 1)
 
 ```
+
+
+# Cross validation on fewer probes
+
+After having followed the protocol of Capper et al. (https://doi.org/10.1038/nature26000), the question arose of knowing if 10'000 probes were to many and could risk an over fitting. A cross validation on 2'000 and 1'000 probes was tested:
+
+![image](./results/CV_10000_plot.png)
+
+![image](./results/CV_2000_plot.png)
+![image](./results/CV_1000_plot.png)
 
 
