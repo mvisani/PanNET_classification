@@ -19,10 +19,10 @@ library(randomForest)
 library(doParallel)
 #setwd("..")
 
-ntrees <- 10000  # 10000 in the paper, here 500 to speed up the example
+ntrees <- 10000 
 cores <- detectCores()-1
 seed <- 180314
-p <- 10000   
+p <- 2000   
 
 message("loading preprocessed data ...",Sys.time())
 #load(file.path("results","betas.ba.RData"))
@@ -51,6 +51,7 @@ rf.varsel <- rfp(betas,
                  mc=cores,
                  mtry = floor(sqrt(nrow(betas))),
                  ntree=ntrees,
+                 tree_total=ntrees,
                  sampsize=rep(min(table(y)),length(table(y))),
                  importance=TRUE)
 
@@ -59,7 +60,7 @@ rf.varsel <- rfp(betas,
 imp.meandecrease <- importance(rf.varsel, type=1)
 
 # save selection forest
-save(rf.varsel,file=file.path("..","results","varsel.RData"))
+save(rf.varsel,file=file.path("..","results","varsel.2000.RData"))
 rm(rf.varsel)
 
 # reduce data matrix
@@ -88,12 +89,12 @@ rf.pred <- randomForest(betasy,
                         oob.prox=TRUE,
                         importance=TRUE,
                         keep.inbag=TRUE,
-                        do.trace=FALSE,
+                        do.trace=1000,
                         seed=seed
 )
 
 message("finished ...",Sys.time())
 
-save(rf.pred,file=file.path("..","results","rf.pred.RData"))
+save(rf.pred,file=file.path("..","results","rf.pred.2000.RData"))
 
 message("finished ...",Sys.time())

@@ -22,18 +22,18 @@ library(doParallel)
 ntrees <- 10000  # 10000 in the paper, here 500 to speed up the example
 cores <- detectCores()-1
 seed <- 180314
-p <- 10000   
+p <- 2000   
 
 message("loading preprocessed data ...",Sys.time())
 #load(file.path("results","betas.ba.RData"))
 if (!exists("betas"))
   betas <- as.data.frame(readRDS("../data/results/meth_combat_beta.Rds"))
 if (!exists("meta_data"))
-  meta_data <- read.table(file = "../data/meta_data/training_meta_data.txt", sep = "\t", header = T)
+  meta_data <- read.table(file = "../data/meta_data/training_meta_data_new.txt", sep = "\t", header = T)
 
 message("performing variable selection ...",Sys.time())
 source(file.path("R","train.R"))
-y <- as.factor(meta_data$CC_Epi_newLRO)
+y <- as.factor(meta_data$Four_classes)
 
 # sd pre filtering to 20k probes, to speed up the example
 #betas <- betas[,order(-apply(betas,2,sd))]
@@ -59,7 +59,7 @@ rf.varsel <- rfp(betas,
 imp.meandecrease <- importance(rf.varsel, type=1)
 
 # save selection forest
-save(rf.varsel,file=file.path("..","results","varsel.RData"))
+save(rf.varsel,file=file.path("..","results","varsel.4_classes.RData"))
 rm(rf.varsel)
 
 # reduce data matrix
@@ -94,6 +94,6 @@ rf.pred <- randomForest(betasy,
 
 message("finished ...",Sys.time())
 
-save(rf.pred,file=file.path("..","results","rf.pred.RData"))
+save(rf.pred,file=file.path("..","results","rf.pred.4_classes.RData"))
 
 message("finished ...",Sys.time())

@@ -49,9 +49,12 @@ calcultateCVfold <- function(Mset,y,batch,fold,p,cores,ntrees){
   message("n: ",nrow(badj$betas.train))
   message("p: ",p)  
   
-  rf <- rfp(badj$betas.train[,or[1:p]],y[fold$train],
-            sampsize=rep(min(table(y[fold$train])),length(table(y[fold$train])))
-            ,mc=cores,ntree=ntrees,importance=TRUE) 
+  rf <- rfp(badj$betas.train[,or[1:p]],
+            y[fold$train],
+            sampsize=rep(min(table(y[fold$train])),length(table(y[fold$train]))),
+            mc=cores,
+            ntree=ntrees,
+            importance=TRUE) 
   
   message("predicting test set ...",Sys.time())
   

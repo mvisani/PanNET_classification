@@ -305,7 +305,8 @@ plotCCheatmap = function(ccObject, metaData, previousCC = NULL, colorList){
 ```
 
 ```{r heatmap 5 clusters, fig.height = 10, fig.width = 14}
-meta_data <- read.table(file = "./data/meta_data/training_meta_data.txt", sep = "\t", header = T)
+require(dplyr)
+meta_data <- read.table(file = "./data/meta_data/training_meta_data_new.txt", sep = "\t", header = T)
 
 scores_plot <- scores[meta_data$Sample_Name, ]
 meta_data <- cbind(meta_data, colnames(scores_plot)[apply(scores_plot,1,which.max)])
@@ -323,6 +324,9 @@ meta_data$groups[meta_data$groups==FALSE] <- "Chan"
 
 meta_data["corretly_classified"] <- meta_data$CC_Epi_newLRO==meta_data$rf_calibrated
 
+max_score <- apply(probs[meta_data$Sample_Name, ], 1, max)
+meta_data <- cbind(meta_data, max_score)
+
 
 plotCCheatmap(cons_cluster, 
               metaData = meta_data %>% 
@@ -331,30 +335,32 @@ plotCCheatmap(cons_cluster,
                               MEN1, 
                               CC_Epi_newLRO,
                               rf,
-                              rf_calibrated),
+                              rf_calibrated,
+                              max_score),
 
               colorList = list(DAXX_ATRX = c(wt = "white", mut = "goldenrod4"),
                                MEN1 = c(wt = "white", mut = "goldenrod1"),
                                ConsClus_k4_UB_UCL_ICGC_Chan = c(Alpha_like = "dodgerblue4",
-                                                                Beta_like = "sienna3",
+                                                                Beta_like = "green",
                                                                 Intermediate_ADM = "lightskyblue1",
                                                                 Intermediate_WT = "darksalmon",
                                                                 new_sample = "yellow"),
                                CC_Epi_newLRO = c(Alpha_like = "dodgerblue4",
-                                                 Beta_like = "sienna3",
+                                                 Beta_like = "green",
                                                  Intermediate_ADM = "lightskyblue1",
                                                  Intermediate_ADM_WT = "hotpink3",
                                                  Intermediate_WT = "darksalmon"),
                                rf = c(Alpha_like = "dodgerblue4",
-                                                 Beta_like = "sienna3",
+                                                 Beta_like = "green",
                                                  Intermediate_ADM = "lightskyblue1",
                                                  Intermediate_ADM_WT = "hotpink3",
                                                  Intermediate_WT = "darksalmon"), 
                                rf_calibrated = c(Alpha_like = "dodgerblue4",
-                                                 Beta_like = "sienna3",
+                                                 Beta_like = "green",
                                                  Intermediate_ADM = "lightskyblue1",
                                                  Intermediate_ADM_WT = "hotpink3",
-                                                 Intermediate_WT = "darksalmon")))
+                                                 Intermediate_WT = "darksalmon"),
+                               max_score = colorRampPalette(c("white", "blue"))(100)))
 
 
 
@@ -381,8 +387,8 @@ Questions:
 After training of the classifier with the top 10'000 probes, the calibrated random forest algorithm classified the samples as follows. 
 ```{r}
 require(pheatmap)
-if (!exists("rf.pred"))
-  load(file = "./results/rf.pred.RData")
+
+load(file = "./results/rf.pred.RData")
 
 m <-table(y.true, y.calibrated)
 m <- m/apply(m, 1, sum)
@@ -446,13 +452,6 @@ out %>% kbl %>% kable_styling()
 
 
 
-```{r, fig.height=10, fig.width = 14}
-par(mfrow=c(3, 2))
-for(i in 1:ncol(scores)){
-  plot(x=scores[,i],y=probs[,i],ylim=c(0,1),pch=16,xlim=c(0,1),col=as.factor((y==colnames(scores)[i])),main=colnames(scores)[i] ,xlab="scores",ylab="calibrated scores")
-  abline(a=0,b=1,col="green",lty=2)
-}
-```
 
 
 ```{r}
@@ -566,7 +565,8 @@ load(file = "./results/rf.pred.RData")
 probes <- importance(rf.pred, type = 1)
 or <- order(probes,decreasing=T)
 probes <- probes[order(probes, decreasing = T)]
-plot(c(1:length(probes)),
+plot(x=c(1:length(probes)),
+     #log="x",
      probes,
      cex=0.3,
      ylab="Mean decrease in accuracy",
@@ -583,5 +583,615 @@ abline(h=0)
 ![image](./results/CV_2000_plot.png)
 ![image](./results/CV_1000_plot.png)
 
+# 2'000 probes Classifier cross-validation 
+Batch effect was NOT taken into account here !
+```{r,echo=FALSE,message=FALSE,error=FALSE,warning=FALSE,fig.height=4,fig.width=12}
+rm(list=ls())
+library(pROC)
+library(HandTill2001)
+source(file.path("scripts", "R","multi_brier.R"))
+source(file.path("scripts", "R","multi_logloss.R"))
+
+load(file.path("results","CVresults_2000.RData"))
+
+AUCscores <- HandTill2001::auc(multcap(response=as.factor(y),predicted=scores))
+AUCprobs <-  HandTill2001::auc(multcap(response=as.factor(y),predicted=probs))
+
+errs <- sum(y!=ys)/length(y)
+errp <- sum(y!=yp)/length(y)
+
+briers <- brier(scores,y)
+brierp <- brier(probs,y) 
+
+logls <- mlogloss(scores,y)
+loglp <- mlogloss(probs,y) 
+
+out <- cbind(c(AUCscores,AUCprobs),c(errs,errp),c(briers,brierp),c(logls,loglp))
+colnames(out) <- c("auc","misclassification","brier score","logloss")
+rownames(out) <- c("raw scores","calibrated scores")
+
+y.true <- y
+y.score <- ys
+y.calibrated <- yp
+```
+
+## Consensus clustering 
+```{r}
+require(pheatmap)
+cons_cluster <- readRDS(file = "./data/raw_data/220609_NDD.consClust_DMP.Rds")
+cons_cluster <- cons_cluster[[5]]
+```
 
 
+```{r}
+plotCCheatmap = function(ccObject, metaData, previousCC = NULL, colorList){
+  ccHmap = ccObject$consensusMatrix
+  ccDist = ccObject$consensusTree
+  ccDist_rev = ccDist
+  ccDist_rev$order = rev(ccDist_rev$order)
+  
+  attr(ccHmap, "dimnames") = list(names(ccObject$consensusClass),
+                                names(ccObject$consensusClass))
+  
+  metaData = as.data.frame(metaData)
+  if(all.equal(rownames(metaData), as.character(seq_len(nrow(metaData)))))
+    rownames(metaData) = metaData$Sample_Name
+  metaData = metaData %>% 
+    dplyr::select(-Sample_Name) 
+  if(!is.null(previousCC))
+    metaData[[previousCC]][is.na(metaData[[previousCC]])] = "new_sample"
+  
+  pheatmap(ccHmap,
+           scale = "none",
+           color = colorRampPalette(c("white", "blue"))(100),
+           cluster_rows = ccDist_rev,
+           cluster_cols = ccDist,
+           show_rownames = F,
+           show_colnames = F,
+           cellheight = 2,
+           cellwidth = 2,
+           annotation_col = metaData,
+           annotation_colors = colorList)
+}
+```
+
+```{r, fig.height = 10, fig.width = 14}
+require(dplyr)
+meta_data <- read.table(file = "./data/meta_data/training_meta_data_new.txt", sep = "\t", header = T)
+
+scores_plot <- scores[meta_data$Sample_Name, ]
+meta_data <- cbind(meta_data, colnames(scores_plot)[apply(scores_plot,1,which.max)])
+colnames(meta_data)[which(names(meta_data) == "colnames(scores_plot)[apply(scores_plot, 1, which.max)]")] <- "rf"
+
+#now for the calibrated scores
+probs_plot <- probs[meta_data$Sample_Name, ]
+meta_data <- cbind(meta_data, colnames(probs_plot)[apply(probs_plot,1,which.max)])
+colnames(meta_data)[which(names(meta_data) == "colnames(probs_plot)[apply(probs_plot, 1, which.max)]")] <- "rf_calibrated"
+
+#meta_data['groups'] <- !is.na(meta_data$Cell_type_groups)
+#meta_data$groups[meta_data$groups == TRUE] <- "UIU"
+#meta_data$groups[grep("^aP", meta_data$Sample_Name)] <- "aP"
+#meta_data$groups[meta_data$groups==FALSE] <- "Chan"
+#
+#meta_data["corretly_classified"] <- meta_data$CC_Epi_newLRO==meta_data$rf_calibrated
+
+max_score <- apply(probs[meta_data$Sample_Name, ], 1, max)
+meta_data <- cbind(meta_data, max_score)
+
+
+plotCCheatmap(cons_cluster, 
+              metaData = meta_data %>% 
+                dplyr::select(Sample_Name, 
+                              DAXX_ATRX, 
+                              MEN1, 
+                              CC_Epi_newLRO,
+                              rf,
+                              rf_calibrated, 
+                              max_score),
+
+              colorList = list(DAXX_ATRX = c(wt = "white", mut = "goldenrod4"),
+                               MEN1 = c(wt = "white", mut = "goldenrod1"),
+                               ConsClus_k4_UB_UCL_ICGC_Chan = c(Alpha_like = "dodgerblue4",
+                                                                Beta_like = "green",
+                                                                Intermediate_ADM = "lightskyblue1",
+                                                                Intermediate_WT = "darksalmon",
+                                                                new_sample = "yellow"),
+                               CC_Epi_newLRO = c(Alpha_like = "dodgerblue4",
+                                                 Beta_like = "green",
+                                                 Intermediate_ADM = "lightskyblue1",
+                                                 Intermediate_ADM_WT = "hotpink3",
+                                                 Intermediate_WT = "darksalmon"),
+                               rf = c(Alpha_like = "dodgerblue4",
+                                                 Beta_like = "green",
+                                                 Intermediate_ADM = "lightskyblue1",
+                                                 Intermediate_ADM_WT = "hotpink3",
+                                                 Intermediate_WT = "darksalmon"), 
+                               rf_calibrated = c(Alpha_like = "dodgerblue4",
+                                                 Beta_like = "green",
+                                                 Intermediate_ADM = "lightskyblue1",
+                                                 Intermediate_ADM_WT = "hotpink3",
+                                                 Intermediate_WT = "darksalmon"),
+                               max_score = colorRampPalette(c("white", "blue"))(100)))
+
+
+
+```
+
+The consensus cluster was used to "create" a response to train the random forest algorithm. The image above shows were the samples were classified according to the consensus cluster, the random forest and the random forest after calibration. 
+
+
+
+```{r}
+require(kableExtra)
+table(meta_data$groups,meta_data$corretly_classified) %>% kbl %>% kable_styling()
+```
+
+Table shows the number of correctly classified and wrongly classified of the original cohorts. 
+
+## Confusion matrix
+Questions: 
+
+* Is the consensus clutering and good response ? 
+* Should the wrongly classified samples be looked again clinically ? reanalyzed ? 
+* ... 
+
+After training of the classifier with the top 10'000 probes, the calibrated random forest algorithm classified the samples as follows. 
+```{r}
+require(pheatmap)
+load(file = "./results/rf.pred.2000.RData")
+
+m <-table(y.true, y.calibrated)
+m <- m/apply(m, 1, sum)
+
+pheatmap(m,
+         display_numbers = table(y.true, y.calibrated),
+         angle_col = 45,
+         treeheight_row = 0,
+         treeheight_col = 0,
+         cluster_rows = F,
+         cluster_cols = F,
+         color=colorRampPalette(c("white", "red"))(100))
+```
+
+Shows confusion matrix as heatmap. Numbers in the cells indicates the number of samples counted in that cell. The color indicates the percentage of samples correctly identified in that class. 
+
+Should be read for right to left: there are 6 Intermidiate_ADM that were classified in the Alpha_like class. 
+
+Looking at the 
+
+
+```{r}
+require(pROC)
+require(ggplot2)
+roc_resp <- as.numeric(y.true!=y.calibrated)
+predictor_roc <- apply(probs, 1, max)
+roc_to_plot <- roc(response=roc_resp, predictor=predictor_roc, ci=TRUE, of="se")
+```
+```{r}
+roc_with_ci <- function(obj) {
+  ciobj <- obj$ci
+  dat.ci <- data.frame(x = as.numeric(rownames(ciobj)),
+                       lower = ciobj[, 1],
+                       upper = ciobj[, 3])
+  
+  ggroc(obj) +
+    theme_minimal() +
+    geom_abline(
+      slope = 1,
+      intercept = 1,
+      linetype = "dashed",
+      alpha = 0.7,
+      color = "black"
+    ) + coord_equal() +
+    geom_ribbon(
+      data = dat.ci,
+      aes(x = x, ymin = lower, ymax = upper),
+      fill = "steelblue",
+      alpha = 0.3
+    ) + ggtitle(paste0("AUC : ", obj$auc))
+} 
+
+roc_with_ci(roc_to_plot)
+```
+
+
+```{r}
+require(kableExtra)
+out %>% kbl %>% kable_styling()
+```
+
+
+
+
+
+```{r}
+require(ggplot2)
+require(ggridges)
+raw_score <- as.data.frame(scores)
+raw_score["predicted"] <- as.vector(y.score)
+raw_score["CC_Epi_newLRO"] <- as.vector(y)
+raw_score <- raw_score[raw_score$predicted == raw_score$CC_Epi_newLRO, ]
+
+yl <- c()
+for (i in 1:nrow(raw_score)) {
+  x <- raw_score[i, 'predicted']
+  yl <- append(yl, raw_score[i, x])
+}
+raw_score["max"] <- yl
+rm(yl, x)
+
+# plot the raw scores
+raw <- ggplot(raw_score, aes(x = max, y = CC_Epi_newLRO, fill = CC_Epi_newLRO)) +
+  ggtitle("Raw scores for correctly classified cases") +
+  xlim(0,1.2) +
+  geom_density_ridges() +
+  theme_ridges() + 
+  theme(legend.position = "none")
+```
+
+```{r}
+require(ggplot2)
+require(ggridges)
+calibrated_score <- as.data.frame(probs)
+calibrated_score["predicted"] <- as.vector(y.calibrated)
+calibrated_score["CC_Epi_newLRO"] <- as.vector(y)
+calibrated_score <- calibrated_score[calibrated_score$predicted == calibrated_score$CC_Epi_newLRO, ]
+
+yl <- c()
+for (i in 1:nrow(calibrated_score)) {
+  x <- calibrated_score[i, 'predicted']
+  yl <- append(yl, calibrated_score[i, x])
+}
+calibrated_score["max"] <- yl
+rm(yl, x)
+
+# plot the raw scores
+calibrated <- ggplot(calibrated_score, aes(x = max, y = CC_Epi_newLRO, fill = CC_Epi_newLRO)) +
+  xlim(0,1.2) +
+  ggtitle("Calibrated scores for correctly classified cases") +
+  geom_density_ridges() +
+  theme_ridges() + 
+  theme(legend.position = "none")
+```
+
+
+
+```{r, fig.width=10}
+cowplot::plot_grid(
+  raw, 
+  calibrated,
+  ncol = 1)
+
+```
+
+
+# Probes  in DiDomenico paper
+```{r}
+require(readxl)
+alpha_vs_beta <-  read_xlsx(path="./data/raw_data/DiDomenico_2020_T6_alpha_like_v_beta_like.xlsx",
+                           skip = 2)
+alpha_vs_beta <- alpha_vs_beta[,1]
+colnames(alpha_vs_beta) <- "probes"
+
+alpha_vs_intermidiate <- read_xlsx(path = "./data/raw_data/DiDomenico_2020_T7_alpha_like_v_intermediate.xlsx",
+                                   skip = 2)
+alpha_vs_intermidiate <- alpha_vs_intermidiate[,1]
+colnames(alpha_vs_intermidiate) <- "probes"
+
+intermidiate_vs_beta <- read_xlsx(path = "./data/raw_data/DiDomenico_2020_T8_intermediate_v_beta_like.xlsx",
+                                  skip = 2)
+intermidiate_vs_beta <- intermidiate_vs_beta[,1]
+colnames(intermidiate_vs_beta) <- "probes"
+```
+
+```{r}
+require(randomForest)
+load(file = "./results/rf.pred.2000.RData")
+require(dplyr)
+probes <- as.data.frame(rownames(importance(rf.pred, type=1)))
+colnames(probes) <- "probes"
+intersect(alpha_vs_beta, probes)
+intersect(alpha_vs_intermidiate, probes)
+intersect(intermidiate_vs_beta, probes)
+
+```
+
+
+```{r}
+require(randomForest)
+load(file = "./results/rf.pred.2000.RData")
+probes <- importance(rf.pred, type = 1)
+or <- order(probes,decreasing=T)
+probes <- probes[order(probes, decreasing = T)]
+plot(x=c(1:length(probes)),
+     #log="x",
+     probes,
+     cex=0.3,
+     ylab="Mean decrease in accuracy",
+     xlab="Probes ranked")
+abline(v=c(1000, 2000), col=c("blue", "red"), lty=c(2,2))
+abline(h=0)
+```
+
+
+# Join Intermediate_ADM_WT and Intermediate_WT into one class
+```{r}
+rm(list = ls())
+load(file = "./results/rf.pred.4_classes.RData")
+probes <- importance(rf.pred, type = 1)
+or <- order(probes,decreasing=T)
+probes <- probes[order(probes, decreasing = T)]
+plot(x=c(1:length(probes)),
+     #log="x",
+     probes,
+     cex=0.3,
+     ylab="Mean decrease in accuracy",
+     xlab="Probes ranked")
+abline(v=c(1000, 2000), col=c("blue", "red"), lty=c(2,2))
+abline(h=0)
+```
+```{r}
+require(randomForest)
+if(!exists("meth_combat_beta"))
+  meth_combat_beta <- as.data.frame(readRDS("./data/results/meth_combat_beta.Rds"))
+
+meta_data <- read.table("./data/meta_data/training_meta_data_new.txt", sep = "\t", header = T)
+load(file = "./CV_four_classes/nfolds.RData")
+y <- meta_data$Four_classes
+
+plot(NA, ylim=c(0,1), xlim=c(1,5000),log="x", xlab="n.probes", ylab="error.cv",
+     main="Cross validation on top 2'000 probes")
+for (i in 1:length(nfolds)){
+  samp <- nfolds[[i]][[1]][[1]][["train"]]
+  cv <- rfcv(trainx = t(meth_combat_beta[or, samp]), 
+       trainy = as.factor(meta_data$Four_classes[samp]), 
+       cv.fold = 3,
+       ntree =500)
+  with(cv, lines(n.var, error.cv, type="o", lwd=2, col=i))
+}
+```
+
+## Consensus clustering 
+```{r}
+rm(list=ls())
+library(pROC)
+library(HandTill2001)
+source(file.path("scripts", "R","multi_brier.R"))
+source(file.path("scripts", "R","multi_logloss.R"))
+
+load(file.path("results","CVresults_four_classes.RData"))
+
+AUCscores <- HandTill2001::auc(multcap(response=as.factor(y),predicted=scores))
+AUCprobs <-  HandTill2001::auc(multcap(response=as.factor(y),predicted=probs))
+
+errs <- sum(y!=ys)/length(y)
+errp <- sum(y!=yp)/length(y)
+
+briers <- brier(scores,y)
+brierp <- brier(probs,y) 
+
+logls <- mlogloss(scores,y)
+loglp <- mlogloss(probs,y) 
+
+out <- cbind(c(AUCscores,AUCprobs),c(errs,errp),c(briers,brierp),c(logls,loglp))
+colnames(out) <- c("auc","misclassification","brier score","logloss")
+rownames(out) <- c("raw scores","calibrated scores")
+
+y.true <- y
+y.score <- ys
+y.calibrated <- yp
+```
+
+```{r}
+require(pheatmap)
+cons_cluster <- readRDS(file = "./data/raw_data/220609_NDD.consClust_DMP.Rds")
+cons_cluster <- cons_cluster[[5]]
+```
+
+```{r}
+plotCCheatmap = function(ccObject, metaData, previousCC = NULL, colorList){
+  ccHmap = ccObject$consensusMatrix
+  ccDist = ccObject$consensusTree
+  ccDist_rev = ccDist
+  ccDist_rev$order = rev(ccDist_rev$order)
+  
+  attr(ccHmap, "dimnames") = list(names(ccObject$consensusClass),
+                                names(ccObject$consensusClass))
+  
+  metaData = as.data.frame(metaData)
+  if(all.equal(rownames(metaData), as.character(seq_len(nrow(metaData)))))
+    rownames(metaData) = metaData$Sample_Name
+  metaData = metaData %>% 
+    dplyr::select(-Sample_Name) 
+  if(!is.null(previousCC))
+    metaData[[previousCC]][is.na(metaData[[previousCC]])] = "new_sample"
+  
+  pheatmap(ccHmap,
+           scale = "none",
+           color = colorRampPalette(c("white", "blue"))(100),
+           cluster_rows = ccDist_rev,
+           cluster_cols = ccDist,
+           show_rownames = F,
+           show_colnames = F,
+           cellheight = 2,
+           cellwidth = 2,
+           annotation_col = metaData,
+           annotation_colors = colorList)
+}
+```
+
+```{r, fig.height = 10, fig.width = 14}
+require(dplyr)
+meta_data <- read.table(file = "./data/meta_data/training_meta_data_new.txt", sep = "\t", header = T)
+
+scores_plot <- scores[meta_data$Sample_Name, ]
+meta_data <- cbind(meta_data, colnames(scores_plot)[apply(scores_plot,1,which.max)])
+colnames(meta_data)[which(names(meta_data) == "colnames(scores_plot)[apply(scores_plot, 1, which.max)]")] <- "rf"
+
+#now for the calibrated scores
+probs_plot <- probs[meta_data$Sample_Name, ]
+meta_data <- cbind(meta_data, colnames(probs_plot)[apply(probs_plot,1,which.max)])
+colnames(meta_data)[which(names(meta_data) == "colnames(probs_plot)[apply(probs_plot, 1, which.max)]")] <- "rf_calibrated"
+
+#meta_data['groups'] <- !is.na(meta_data$Cell_type_groups)
+#meta_data$groups[meta_data$groups == TRUE] <- "UIU"
+#meta_data$groups[grep("^aP", meta_data$Sample_Name)] <- "aP"
+#meta_data$groups[meta_data$groups==FALSE] <- "Chan"
+#meta_data["corretly_classified"] <- meta_data$Four_classes==meta_data$rf_calibrated
+
+max_score <- apply(probs[meta_data$Sample_Name, ], 1, max)
+meta_data <- cbind(meta_data, max_score)
+
+
+plotCCheatmap(cons_cluster, 
+              metaData = meta_data %>% 
+                dplyr::select(Sample_Name, 
+                              DAXX_ATRX, 
+                              MEN1,
+                              rf,
+                              rf_calibrated,
+                              Four_classes,
+                              max_score),
+
+              colorList = list(DAXX_ATRX = c(wt = "white", mut = "goldenrod4"),
+                               MEN1 = c(wt = "white", mut = "goldenrod1"),
+                               ConsClus_k4_UB_UCL_ICGC_Chan = c(Alpha_like = "dodgerblue4",
+                                                                Beta_like = "green",
+                                                                Intermediate_ADM = "lightskyblue1",
+                                                                Intermediate_WT = "darksalmon",
+                                                                new_sample = "yellow"),
+                               rf = c(Alpha_like = "dodgerblue4",
+                                                 Beta_like = "green",
+                                                 Intermediate_ADM = "lightskyblue1",
+                                                 Intermediate = "hotpink3"), 
+                               rf_calibrated = c(Alpha_like = "dodgerblue4",
+                                                 Beta_like = "green",
+                                                 Intermediate_ADM = "lightskyblue1",
+                                                 Intermediate = "hotpink3"),
+                               Four_classes = c(Alpha_like = "dodgerblue4",
+                                                 Beta_like = "green",
+                                                 Intermediate_ADM = "lightskyblue1",
+                                                 Intermediate = "hotpink3"),
+                               max_score = colorRampPalette(c("white", "blue"))(100)))
+
+
+
+```
+
+```{r}
+require(pheatmap)
+load(file = "./results/rf.pred.4_classes.RData")
+
+m <-table(y.true, y.calibrated)
+m <- m/apply(m, 1, sum)
+
+pheatmap(m,
+         display_numbers = table(y.true, y.calibrated),
+         angle_col = 45,
+         treeheight_row = 0,
+         treeheight_col = 0,
+         cluster_rows = F,
+         cluster_cols = F,
+         color=colorRampPalette(c("white", "red"))(100))
+```
+
+
+```{r}
+require(kableExtra)
+out %>% kbl %>% kable_styling()
+```
+
+
+```{r}
+require(pROC)
+require(ggplot2)
+roc_resp <- as.numeric(y.true!=y.calibrated)
+predictor_roc <- apply(probs, 1, max)
+roc_to_plot <- roc(response=roc_resp, predictor=predictor_roc, ci=TRUE, of="se")
+```
+
+```{r}
+roc_with_ci <- function(obj) {
+  ciobj <- obj$ci
+  dat.ci <- data.frame(x = as.numeric(rownames(ciobj)),
+                       lower = ciobj[, 1],
+                       upper = ciobj[, 3])
+  
+  ggroc(obj) +
+    theme_minimal() +
+    geom_abline(
+      slope = 1,
+      intercept = 1,
+      linetype = "dashed",
+      alpha = 0.7,
+      color = "black"
+    ) + coord_equal() +
+    geom_ribbon(
+      data = dat.ci,
+      aes(x = x, ymin = lower, ymax = upper),
+      fill = "steelblue",
+      alpha = 0.3
+    ) + ggtitle(paste0("AUC : ", obj$auc))
+} 
+
+roc_with_ci(roc_to_plot)
+```
+
+```{r}
+require(ggplot2)
+require(ggridges)
+raw_score <- as.data.frame(scores)
+raw_score["predicted"] <- as.vector(y.score)
+raw_score["Four_classes"] <- as.vector(y)
+raw_score <- raw_score[raw_score$predicted == raw_score$Four_classes, ]
+
+yl <- c()
+for (i in 1:nrow(raw_score)) {
+  x <- raw_score[i, 'predicted']
+  yl <- append(yl, raw_score[i, x])
+}
+raw_score["max"] <- yl
+rm(yl, x)
+
+# plot the raw scores
+raw <- ggplot(raw_score, aes(x = max, y = Four_classes, fill = Four_classes)) +
+  ggtitle("Raw scores for correctly classified cases") +
+  xlim(0,1.2) +
+  geom_density_ridges() +
+  theme_ridges() + 
+  theme(legend.position = "none")
+```
+
+```{r}
+require(ggplot2)
+require(ggridges)
+calibrated_score <- as.data.frame(probs)
+calibrated_score["predicted"] <- as.vector(y.calibrated)
+calibrated_score["Four_classes"] <- as.vector(y)
+calibrated_score <- calibrated_score[calibrated_score$predicted == calibrated_score$Four_classes, ]
+
+yl <- c()
+for (i in 1:nrow(calibrated_score)) {
+  x <- calibrated_score[i, 'predicted']
+  yl <- append(yl, calibrated_score[i, x])
+}
+calibrated_score["max"] <- yl
+rm(yl, x)
+
+# plot the raw scores
+calibrated <- ggplot(calibrated_score, aes(x = max, y = Four_classes, fill = Four_classes)) +
+  xlim(0,1.2) +
+  ggtitle("Calibrated scores for correctly classified cases") +
+  geom_density_ridges() +
+  theme_ridges() + 
+  theme(legend.position = "none")
+```
+
+
+
+```{r, fig.width=10}
+cowplot::plot_grid(
+  raw, 
+  calibrated,
+  ncol = 1)
+```
