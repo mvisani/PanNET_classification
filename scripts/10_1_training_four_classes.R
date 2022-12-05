@@ -17,12 +17,14 @@ rm(list=ls())
 
 library(randomForest)
 library(doParallel)
-#setwd("..")
 
-ntrees <- 10000  # 10000 in the paper, here 500 to speed up the example
+
+#ntrees <- 10000  # 10000 in the paper, here 500 to speed up the example
+ntrees <- 1000
 cores <- detectCores()-1
 seed <- 180314
-p <- 2000   
+#p <- 2000   
+p <- 1000
 
 message("loading preprocessed data ...",Sys.time())
 #load(file.path("results","betas.ba.RData"))

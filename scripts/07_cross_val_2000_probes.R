@@ -17,9 +17,11 @@ library(minfi)
 library(limma)
 #setwd("..")
 
-ntrees <- 10000
+#ntrees <- 10000
+ntrees <- 1000
 cores <- detectCores() - 1
 seed <- 180314
+#p <- 2000
 p <- 2000
 folds <- 3
 

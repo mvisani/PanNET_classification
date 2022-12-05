@@ -81,7 +81,7 @@ bind_rows(SVList) %>%
 Since we have many surrogate variables, there is nothing to worry about on the `Array` variable because the p-value is at 0.01 so there is a small percentage of chance that that SV was just assigned by chance. 
 
 ## PCA
-PCA tries to preserve the Global Structure of data i.e when converting d-dimensional data to d’-dimensional data then it tries to map all the clusters as a whole due to which local structures might get lost. That is why we also checked with t-SNE. 
+PCA tries to preserve the global structure of data i.e when converting d-dimensional data to d'-dimensional data then it tries to map all the clusters as a whole due to which local structures might get lost. That is why we also checked with t-SNE. 
 ```{r, fig.height=10, fig.width=14}
 require(fafreqs)
 require(tibble)
@@ -132,6 +132,7 @@ cowplot::plot_grid(
 )
 
 ```
+
 We can't see any pattern. Maybe a small one for the Intermidiate_ADM probes classified by the `CC_Epi_newLRO` (bottom left image). 
 The two first PCs only describe in total 21\% of the variance, which is quite low.
 
@@ -227,7 +228,7 @@ cowplot::plot_grid(
 This is a final "check" to see if the technology used could have a bias in our data. Here we see that the EPIC has the same trend as the 450K indicating that there shouldn't be any bias (for now...). 
 
 # Classifier development
-The random forest was developped by 
+The random forest was developed by training the data on the 10'000 most important probes. 10'000 trees were developped, and we looked at the 
 
 
 
@@ -930,6 +931,8 @@ plot(x=c(1:length(probes)),
 abline(v=c(1000, 2000), col=c("blue", "red"), lty=c(2,2))
 abline(h=0)
 ```
+
+
 ```{r}
 require(randomForest)
 if(!exists("meth_combat_beta"))
@@ -940,7 +943,7 @@ load(file = "./CV_four_classes/nfolds.RData")
 y <- meta_data$Four_classes
 
 plot(NA, ylim=c(0,1), xlim=c(1,5000),log="x", xlab="n.probes", ylab="error.cv",
-     main="Cross validation on top 2'000 probes")
+     main="Cross validation on top 1'000 probes")
 for (i in 1:length(nfolds)){
   samp <- nfolds[[i]][[1]][[1]][["train"]]
   cv <- rfcv(trainx = t(meth_combat_beta[or, samp]), 
@@ -1096,6 +1099,7 @@ pheatmap(m,
 ```
 
 
+
 ```{r}
 require(kableExtra)
 out %>% kbl %>% kable_styling()
@@ -1195,3 +1199,6 @@ cowplot::plot_grid(
   calibrated,
   ncol = 1)
 ```
+
+
+![image](./results/fine_tuning.png)
