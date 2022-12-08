@@ -1,10 +1,8 @@
 rm(list=ls())
-
 library(randomForest)
 library(minfi)
 library(limma)
 library(doParallel)
-#setwd("..")
 
 cores <- detectCores() - 1
 ntrees <- c(100, 500, 1000, 5000, 10000)
@@ -15,9 +13,9 @@ folds <- 3
 if (!exists("betas"))
   betas <- readRDS("../data/results/meth_combat_beta.Rds")
 if (!exists("meta_data"))
-  meta_data <- read.table(file = "../data/meta_data/training_meta_data.txt",
+  meta_data <- read.table(file = "../data/meta_data/training_meta_data_new.txt",
                           sep = "\t", header = T)
-y <- as.factor(meta_data$CC_Epi_newLRO)
+y <- as.factor(meta_data$Four_classes)
 source(file.path("R","makefolds.R"))
 source(file.path("R", "train.R"))
 nfolds <- makenestedfolds(y,folds)
@@ -27,7 +25,7 @@ rf.varsel <- rfp(betas,
                  y,
                  mc=cores,
                  mtry = floor(sqrt(nrow(betas))),
-                 ntree=10000,
+                 ntree=1000,
                  sampsize=rep(min(table(y)),length(table(y))),
                  importance=TRUE, 
                  seed = seed)
@@ -36,7 +34,7 @@ rf.varsel <- rfp(betas,
 imp.meandecrease <- importance(rf.varsel, type=1)
 or <- order(imp.meandecrease,decreasing=T)
 
-png(filename = "../results/fine_tuning.png", width = 2000, height = 1752)
+png(filename = "../results/fine_tuning_4_classes.png", width = 2000, height = 1752)
 par(mfrow=c(length(p), length(ntrees)), mar = c(2, 2, 2, 2))
 #par(mfrow=c(2,3))
 for (probes in p) {

@@ -278,6 +278,99 @@ cowplot::plot_grid(raw_10, calibrated_10,
 ```
 
 
+## Consensus clustering
+```{r}
+require(pheatmap)
+cons_cluster <- readRDS(file = "./data/raw_data/220609_NDD.consClust_DMP.Rds")
+cons_cluster <- cons_cluster[[5]]
+```
+
+```{r}
+plotCCheatmap = function(ccObject, metaData, previousCC = NULL, colorList){
+  ccHmap = ccObject$consensusMatrix
+  ccDist = ccObject$consensusTree
+  ccDist_rev = ccDist
+  ccDist_rev$order = rev(ccDist_rev$order)
+  
+  attr(ccHmap, "dimnames") = list(names(ccObject$consensusClass),
+                                names(ccObject$consensusClass))
+  
+  metaData = as.data.frame(metaData)
+  if(all.equal(rownames(metaData), as.character(seq_len(nrow(metaData)))))
+    rownames(metaData) = metaData$Sample_Name
+  metaData = metaData %>% 
+    dplyr::select(-Sample_Name) 
+  if(!is.null(previousCC))
+    metaData[[previousCC]][is.na(metaData[[previousCC]])] = "new_sample"
+  
+  pheatmap(ccHmap,
+           scale = "none",
+           color = colorRampPalette(c("white", "blue"))(100),
+           cluster_rows = ccDist_rev,
+           cluster_cols = ccDist,
+           show_rownames = F,
+           show_colnames = F,
+           cellheight = 2,
+           cellwidth = 2,
+           annotation_col = metaData,
+           annotation_colors = colorList)
+}
+```
+
+```{r, fig.height = 10, fig.width = 14}
+require(dplyr)
+meta_data <- read.table(file = "./data/meta_data/training_meta_data_new.txt", sep = "\t", header = T)
+
+scores_plot <- probes_100$scores[meta_data$Sample_Name, ]
+meta_data <- cbind(meta_data, colnames(scores_plot)[apply(scores_plot,1,which.max)])
+colnames(meta_data)[which(names(meta_data) == "colnames(scores_plot)[apply(scores_plot, 1, which.max)]")] <- "rf"
+
+#now for the calibrated scores
+probs_plot <- probes_100$probs[meta_data$Sample_Name, ]
+meta_data <- cbind(meta_data, colnames(probs_plot)[apply(probs_plot,1,which.max)])
+colnames(meta_data)[which(names(meta_data) == "colnames(probs_plot)[apply(probs_plot, 1, which.max)]")] <- "rf_calibrated"
+
+
+max_score <- apply(probes_100$probs[meta_data$Sample_Name, ], 1, max)
+meta_data <- cbind(meta_data, max_score)
+
+
+plotCCheatmap(cons_cluster, 
+              metaData = meta_data %>% 
+                dplyr::select(Sample_Name, 
+                              DAXX_ATRX, 
+                              MEN1, 
+                              Four_classes,
+                              rf,
+                              rf_calibrated, 
+                              max_score),
+
+              colorList = list(DAXX_ATRX = c(wt = "white", mut = "goldenrod4"),
+                               MEN1 = c(wt = "white", mut = "goldenrod1"),
+                               ConsClus_k4_UB_UCL_ICGC_Chan = c(Alpha_like = "dodgerblue4",
+                                                                Beta_like = "green",
+                                                                Intermediate_ADM = "lightskyblue1",
+                                                                Intermediate_WT = "darksalmon",
+                                                                new_sample = "yellow"),
+                               rf = c(Alpha_like = "dodgerblue4",
+                                                 Beta_like = "green",
+                                                 Intermediate_ADM = "lightskyblue1",
+                                                 Intermediate = "hotpink3"), 
+                               rf_calibrated = c(Alpha_like = "dodgerblue4",
+                                                 Beta_like = "green",
+                                                 Intermediate_ADM = "lightskyblue1",
+                                                 Intermediate = "hotpink3"),
+                               Four_classes = c(Alpha_like = "dodgerblue4",
+                                                 Beta_like = "green",
+                                                 Intermediate_ADM = "lightskyblue1",
+                                                 Intermediate = "hotpink3"),
+                               max_score = colorRampPalette(c("white", "blue"))(100)))
+
+
+
+```
+
+
 # Probes  in DiDomenico paper
 
 ```{r, echo=FALSE, include=T}
@@ -306,9 +399,8 @@ probes <- as.data.frame(rownames(importance(rf.pred, type=1)))
 colnames(probes) <- "probes"
 final_probes <- unique(c(intersect(alpha_vs_beta$probes, probes$probes),
                   intersect(alpha_vs_intermediate$probes, probes$probes),
-                  intersect(intermediate_vs_beta$probes, probes$probes)
-)
-)
+                  intersect(intermediate_vs_beta$probes, probes$probes))
+                  )
 
 ```
 

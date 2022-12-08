@@ -244,7 +244,7 @@ There seem to be no difference between number of trees (row wise). However the n
 * 2'000 probes, 1'000 trees
 * 1'000 probes 1'000 trees
 
-We realized that the number of trees could be reduced to 500. We then tried to reduce the number of probes needed for the random forest. After testing with 10'000, 2'000 and 1'000 probes the model still seemed to be overfitting the date and the error rate didn't to go down much. We then decided to reduce to 10, 25, 50, 100, 200 and 500 probes :
+We realized that the number of trees could be reduced to 500. We then tried to reduce the number of probes needed for the random forest. After testing with 10'000, 2'000 and 1'000 probes the model still seemed to be overfitting the data and the error rate didn't to go down much. We then decided to reduce to 10, 25, 50, 100, 200 and 500 probes :
 
 ![image](./results/n_probe_selection.png)
 
@@ -405,7 +405,7 @@ probes_500 <- load_file(file="./out_500_probes/CVresults.RData")
 
 ```
 
-```{r, echo=FALSE, include=FALSE}
+```{r, echo=T, include=F}
 conf_mat_10 <- confusion_matrix(probes_10, 10)
 conf_mat_25 <- confusion_matrix(probes_25, 25)
 conf_mat_50 <- confusion_matrix(probes_50, 50)
@@ -413,6 +413,9 @@ conf_mat_100 <- confusion_matrix(probes_100, 100)
 conf_mat_200 <- confusion_matrix(probes_200, 200)
 conf_mat_500 <- confusion_matrix(probes_500, 500)
 ```
+
+## Confusion matrices
+
 
 ```{r, fig.height=20, fig.width=20}
 library("grid")
@@ -518,8 +521,104 @@ cowplot::plot_grid(raw_10, calibrated_10,
       "200 probes", "500 probes"),each=2)))
 ```
 
+From here we decided that 100 probes would be the best fit. To avoid overfitting, we decided to stay parsimonious and keep the lowest possible amount of probes. Unfortunately, calibration seemed not to increase the scores so well. This is probably due to the lack of little data we have. The classes with enough data or data were very different form the rest of the dataset (Intermediate_ADM and Beta_like)  could have their score increased but the others couldn't. 
+## Consensus clustering
+
+```{r}
+require(pheatmap)
+cons_cluster <- readRDS(file = "./data/raw_data/220609_NDD.consClust_DMP.Rds")
+cons_cluster <- cons_cluster[[5]]
+```
+
+```{r}
+plotCCheatmap = function(ccObject, metaData, previousCC = NULL, colorList){
+  ccHmap = ccObject$consensusMatrix
+  ccDist = ccObject$consensusTree
+  ccDist_rev = ccDist
+  ccDist_rev$order = rev(ccDist_rev$order)
+  
+  attr(ccHmap, "dimnames") = list(names(ccObject$consensusClass),
+                                names(ccObject$consensusClass))
+  
+  metaData = as.data.frame(metaData)
+  if(all.equal(rownames(metaData), as.character(seq_len(nrow(metaData)))))
+    rownames(metaData) = metaData$Sample_Name
+  metaData = metaData %>% 
+    dplyr::select(-Sample_Name) 
+  if(!is.null(previousCC))
+    metaData[[previousCC]][is.na(metaData[[previousCC]])] = "new_sample"
+  
+  pheatmap(ccHmap,
+           scale = "none",
+           color = colorRampPalette(c("white", "blue"))(100),
+           cluster_rows = ccDist_rev,
+           cluster_cols = ccDist,
+           show_rownames = F,
+           show_colnames = F,
+           cellheight = 2,
+           cellwidth = 2,
+           annotation_col = metaData,
+           annotation_colors = colorList)
+}
+```
+
+```{r, fig.height = 10, fig.width = 14}
+require(dplyr)
+meta_data <- read.table(file = "./data/meta_data/training_meta_data_new.txt", sep = "\t", header = T)
+
+scores_plot <- probes_100$scores[meta_data$Sample_Name, ]
+meta_data <- cbind(meta_data, colnames(scores_plot)[apply(scores_plot,1,which.max)])
+colnames(meta_data)[which(names(meta_data) == "colnames(scores_plot)[apply(scores_plot, 1, which.max)]")] <- "rf"
+
+#now for the calibrated scores
+probs_plot <- probes_100$probs[meta_data$Sample_Name, ]
+meta_data <- cbind(meta_data, colnames(probs_plot)[apply(probs_plot,1,which.max)])
+colnames(meta_data)[which(names(meta_data) == "colnames(probs_plot)[apply(probs_plot, 1, which.max)]")] <- "rf_calibrated"
 
 
+max_score <- apply(probes_100$probs[meta_data$Sample_Name, ], 1, max)
+meta_data <- cbind(meta_data, max_score)
+
+
+plotCCheatmap(cons_cluster, 
+              metaData = meta_data %>% 
+                dplyr::select(Sample_Name, 
+                              DAXX_ATRX, 
+                              MEN1, 
+                              CC_Epi_newLRO,
+                              rf,
+                              rf_calibrated, 
+                              max_score),
+
+              colorList = list(DAXX_ATRX = c(wt = "white", mut = "goldenrod4"),
+                               MEN1 = c(wt = "white", mut = "goldenrod1"),
+                               ConsClus_k4_UB_UCL_ICGC_Chan = c(Alpha_like = "dodgerblue4",
+                                                                Beta_like = "green",
+                                                                Intermediate_ADM = "lightskyblue1",
+                                                                Intermediate_WT = "darksalmon",
+                                                                new_sample = "yellow"),
+                               CC_Epi_newLRO = c(Alpha_like = "dodgerblue4",
+                                                 Beta_like = "green",
+                                                 Intermediate_ADM = "lightskyblue1",
+                                                 Intermediate_ADM_WT = "hotpink3",
+                                                 Intermediate_WT = "darksalmon"),
+                               rf = c(Alpha_like = "dodgerblue4",
+                                                 Beta_like = "green",
+                                                 Intermediate_ADM = "lightskyblue1",
+                                                 Intermediate_ADM_WT = "hotpink3",
+                                                 Intermediate_WT = "darksalmon"), 
+                               rf_calibrated = c(Alpha_like = "dodgerblue4",
+                                                 Beta_like = "green",
+                                                 Intermediate_ADM = "lightskyblue1",
+                                                 Intermediate_ADM_WT = "hotpink3",
+                                                 Intermediate_WT = "darksalmon"),
+                               max_score = colorRampPalette(c("white", "blue"))(100)))
+
+
+
+```
+
+Here random forest doesn't classify the samples very well. 
 # Probes  in DiDomenico paper
 
 ```{r, echo=FALSE, include=T}
