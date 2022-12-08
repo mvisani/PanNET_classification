@@ -228,21 +228,137 @@ cowplot::plot_grid(
 This is a final "check" to see if the technology used could have a bias in our data. Here we see that the EPIC has the same trend as the 450K indicating that there shouldn't be any bias (for now...). 
 
 # Classifier development
-The random forest was developed by training the data on the 10'000 most important probes. 10'000 trees were developped, and we looked at the 
 
+The random forest was first trained on the entire data set with 10'000 trees. This allowed to look at the most important probes. The final classifier was then trained on the top 10'000 thousand probes only. 
 
+However, according to some literature (https://doi.org/10.1007/978-3-642-31537-4_13 , https://doi.org/10.1002/widm.1301), 1'000 trees seem to be enough and the biggest performance gain can often be achieved when growing the first 100 trees. Since 10'000 trees take a lot of computation time, hyper parameter tuning could be useful. The function `rfcv` was then run by testing 100, 500, 1000, 5000 and 10000 trees on the top 10, 100, 1000, 10000 probes. 
 
+![image](./results/fine_tuning.png)
+
+There seem to be no difference between number of trees (row wise). However the number of probes has an impact. The following tests were then followed: 
+
+* 10'000 probes, 10'000 trees
+* 2'000 probes, 1'000 trees (not shown)
+* 1'000 probes 1'000 trees
+* 1'000 probes 1'000 trees but joining Intermediate_ADM_WT and Intermediate_WT into one class
+
+We realized that the number of trees could be reduced to 500. We then tried to reduce the number of probes needed for the random forest. After testing with 10'000, 2'000 and 1'000 probes the model still seemed to be overfitting the date and the error rate didn't to go down much. We then decided to reduce to 10, 25, 50, 100, 200 and 500 probes :
+
+[!image](./results/n_probe_selection.png)
+
+In order to select the ideal number of probes, we checked for confusion matrices, AUC and miss-classification rates of the 6 previous tests.
+
+**NOTE** the files for the 10'000, 2'000 and 1'000 probes have been deleted but if needed, the can be run using the the `pipeline_5_classes.sh` script with the corresponding number of probes. The number of trees still remains 500. If you want more trees, please change it in the scripts. 
 
 # Classifier cross-validation
 Batch effect was NOT taken into account here !
-```{r,echo=FALSE,message=FALSE,error=FALSE,warning=FALSE,fig.height=4,fig.width=12}
+```{r}
+load_file <- function(file=file){
+  load(file = file, temp_env <- new.env())
+  return(as.list(temp_env))
+}
+
+CV_result <- function(data=data){
+  require(pROC)
+  require(HandTill2001)
+  source(file.path("scripts", "R","multi_brier.R"))
+  source(file.path("scripts", "R","multi_logloss.R"))
+  AUCscores <- HandTill2001::auc(multcap(response=as.factor(data$y),predicted=data$scores))
+  AUCprobs <-  HandTill2001::auc(multcap(response=as.factor(data$y),predicted=data$probs))
+  
+  errs <- sum(data$y!=data$ys)/length(data$y)
+  errp <- sum(data$y!=data$yp)/length(data$y)
+  
+  briers <- brier(data$scores,data$y)
+  brierp <- brier(data$probs,data$y) 
+  
+  logls <- mlogloss(data$scores,data$y)
+  loglp <- mlogloss(data$probs,data$y) 
+  
+  out <- cbind(c(AUCscores,AUCprobs),c(errs,errp),c(briers,brierp),c(logls,loglp))
+  colnames(out) <- c("auc","misclassification","brier score","logloss")
+  rownames(out) <- c("raw scores","calibrated scores")
+  
+  y.true <- data$y
+  y.score <- data$ys
+  y.calibrated <- data$yp
+  return(list(AUCprobs=AUCprobs,
+              AUCscores=AUCscores, errs=errs,
+              errp=errp, briers=briers, brierp=brierp,
+              logls=logls, loglp=loglp, out=out,
+              y.true=y.true, y.score=y.score, y.calibrated=y.calibrated, 
+              scores=data$scores,
+              probs=data$probs))
+}
+
+confusion_matrix <- function(data=data){
+  require(pheatmap)
+  require(RColorBrewer)
+  m <-table(data$y.true, data$y.calibrated)
+  m <- m/apply(m, 1, sum)
+  
+  return(
+  pheatmap(m,
+           display_numbers = table(data$y.true, data$y.calibrated),
+           angle_col = 45,
+           treeheight_row = 0,
+           treeheight_col = 0,
+           cluster_rows = F,
+           cluster_cols = F,
+           color=colorRampPalette(c("white", "red"))(100))
+  )
+}
+
+
+ROC_graph <- function(data=data){
+  require(pROC)
+  require(ggplot2)
+  require(RColorBrewer)
+  roc_resp <- as.numeric(data$y.true!=data$y.calibrated)
+  predictor_roc <- apply(data$probs, 1, max)
+  roc_to_plot <- roc(response=roc_resp, predictor=predictor_roc, ci=TRUE, of="se")
+  roc_with_ci <- function(obj) {
+    ciobj <- obj$ci
+    dat.ci <- data.frame(x = as.numeric(rownames(ciobj)),
+                         lower = ciobj[, 1],
+                         upper = ciobj[, 3])
+    
+    ggroc(obj, legacy.axes = T) +
+      theme_minimal() +
+      geom_abline(
+        slope = 1,
+        intercept = 0,
+        linetype = "dashed",
+        alpha = 0.7,
+        color = "black"
+      ) + coord_equal() +
+      geom_ribbon(
+        data = dat.ci,
+        aes(x = 1-x, ymin = lower, ymax = upper),
+        fill = "steelblue",
+        alpha = 0.3
+      ) + ggtitle(paste0("AUC : ", obj$auc))
+  } 
+  
+  return(roc_with_ci(roc_to_plot))
+}
+```
+
+```{r}
+probes_10 <- load_file(file="./out_10_probes/CVresults.RData")
+probes_10 <- CV_result(data=probes_10)
+test_roc <- ROC_graph(probes_10)
+test_confusion <- confusion_matrix(probes_10)
+```
+
+```{r,fig.height=4,fig.width=12}
 rm(list=ls())
 library(pROC)
 library(HandTill2001)
 source(file.path("scripts", "R","multi_brier.R"))
 source(file.path("scripts", "R","multi_logloss.R"))
 
-load(file.path("results","CVresults.RData"))
+load(file.path("out_10_probes","CVresults.RData"))
 
 AUCscores <- HandTill2001::auc(multcap(response=as.factor(y),predicted=scores))
 AUCprobs <-  HandTill2001::auc(multcap(response=as.factor(y),predicted=probs))
@@ -389,7 +505,7 @@ After training of the classifier with the top 10'000 probes, the calibrated rand
 ```{r}
 require(pheatmap)
 
-load(file = "./results/rf.pred.RData")
+#load(file = "./results/rf.pred.RData")
 
 m <-table(y.true, y.calibrated)
 m <- m/apply(m, 1, sum)
@@ -406,7 +522,7 @@ pheatmap(m,
 
 Shows confusion matrix as heatmap. Numbers in the cells indicates the number of samples counted in that cell. The color indicates the percentage of samples correctly identified in that class. 
 
-Should be read for right to left: there are 6 Intermidiate_ADM that were classified in the Alpha_like class. 
+Should be read from right to left: there are 6 Intermidiate_ADM that were classified in the Alpha_like class. 
 
 Looking at the 
 
@@ -425,18 +541,18 @@ roc_with_ci <- function(obj) {
                        lower = ciobj[, 1],
                        upper = ciobj[, 3])
   
-  ggroc(obj) +
+  ggroc(obj,legacy.axes = T) +
     theme_minimal() +
     geom_abline(
       slope = 1,
-      intercept = 1,
+      intercept = 0,
       linetype = "dashed",
       alpha = 0.7,
       color = "black"
     ) + coord_equal() +
     geom_ribbon(
       data = dat.ci,
-      aes(x = x, ymin = lower, ymax = upper),
+      aes(x = 1-x, ymin = lower, ymax = upper),
       fill = "steelblue",
       alpha = 0.3
     ) + ggtitle(paste0("AUC : ", obj$auc))
@@ -584,16 +700,17 @@ abline(h=0)
 ![image](./results/CV_2000_plot.png)
 ![image](./results/CV_1000_plot.png)
 
-# 2'000 probes Classifier cross-validation 
+# 1'000 probes Classifier cross-validation 
 Batch effect was NOT taken into account here !
-```{r,echo=FALSE,message=FALSE,error=FALSE,warning=FALSE,fig.height=4,fig.width=12}
+
+```{r,fig.height=4,fig.width=12}
 rm(list=ls())
 library(pROC)
 library(HandTill2001)
 source(file.path("scripts", "R","multi_brier.R"))
 source(file.path("scripts", "R","multi_logloss.R"))
 
-load(file.path("results","CVresults_2000.RData"))
+load(file.path("results","CVresults_1000.RData"))
 
 AUCscores <- HandTill2001::auc(multcap(response=as.factor(y),predicted=scores))
 AUCprobs <-  HandTill2001::auc(multcap(response=as.factor(y),predicted=probs))
@@ -722,24 +839,17 @@ The consensus cluster was used to "create" a response to train the random forest
 
 
 
-```{r}
-require(kableExtra)
-table(meta_data$groups,meta_data$corretly_classified) %>% kbl %>% kable_styling()
-```
-
-Table shows the number of correctly classified and wrongly classified of the original cohorts. 
-
 ## Confusion matrix
 Questions: 
 
-* Is the consensus clutering and good response ? 
+* Is the consensus clustering and good response ? 
 * Should the wrongly classified samples be looked again clinically ? reanalyzed ? 
 * ... 
 
 After training of the classifier with the top 10'000 probes, the calibrated random forest algorithm classified the samples as follows. 
 ```{r}
 require(pheatmap)
-load(file = "./results/rf.pred.2000.RData")
+#load(file = "./results/rf.pred.2000.RData")
 
 m <-table(y.true, y.calibrated)
 m <- m/apply(m, 1, sum)
@@ -775,18 +885,18 @@ roc_with_ci <- function(obj) {
                        lower = ciobj[, 1],
                        upper = ciobj[, 3])
   
-  ggroc(obj) +
+  ggroc(obj, legacy.axes = T) +
     theme_minimal() +
     geom_abline(
       slope = 1,
-      intercept = 1,
+      intercept = 0,
       linetype = "dashed",
       alpha = 0.7,
       color = "black"
     ) + coord_equal() +
     geom_ribbon(
       data = dat.ci,
-      aes(x = x, ymin = lower, ymax = upper),
+      aes(x = 1-x, ymin = lower, ymax = upper),
       fill = "steelblue",
       alpha = 0.3
     ) + ggtitle(paste0("AUC : ", obj$auc))
@@ -1121,18 +1231,18 @@ roc_with_ci <- function(obj) {
                        lower = ciobj[, 1],
                        upper = ciobj[, 3])
   
-  ggroc(obj) +
+  ggroc(obj, legacy.axes=TRUE) +
     theme_minimal() +
     geom_abline(
       slope = 1,
-      intercept = 1,
+      intercept = 0,
       linetype = "dashed",
       alpha = 0.7,
       color = "black"
     ) + coord_equal() +
     geom_ribbon(
       data = dat.ci,
-      aes(x = x, ymin = lower, ymax = upper),
+      aes(x = 1-x, ymin = lower, ymax = upper),
       fill = "steelblue",
       alpha = 0.3
     ) + ggtitle(paste0("AUC : ", obj$auc))
@@ -1169,18 +1279,12 @@ raw <- ggplot(raw_score, aes(x = max, y = Four_classes, fill = Four_classes)) +
 ```{r}
 require(ggplot2)
 require(ggridges)
-calibrated_score <- as.data.frame(probs)
-calibrated_score["predicted"] <- as.vector(y.calibrated)
-calibrated_score["Four_classes"] <- as.vector(y)
-calibrated_score <- calibrated_score[calibrated_score$predicted == calibrated_score$Four_classes, ]
-
-yl <- c()
-for (i in 1:nrow(calibrated_score)) {
-  x <- calibrated_score[i, 'predicted']
-  yl <- append(yl, calibrated_score[i, x])
-}
-calibrated_score["max"] <- yl
-rm(yl, x)
+calibrated_score <- as.data.frame(probes_10$probs)
+calibrated_score <- calibrated_score[probes_10$y.true == probes_10$y.calibrated, ]
+max <- apply(calibrated_score, 1, max)
+Four_classes <- colnames(calibrated_score)[apply(calibrated_score, 1, which.max)]
+calibrated_score <- cbind(calibrated_score, max)
+calibrated_score <- cbind(calibrated_score, Four_classes)
 
 # plot the raw scores
 calibrated <- ggplot(calibrated_score, aes(x = max, y = Four_classes, fill = Four_classes)) +
@@ -1189,6 +1293,7 @@ calibrated <- ggplot(calibrated_score, aes(x = max, y = Four_classes, fill = Fou
   geom_density_ridges() +
   theme_ridges() + 
   theme(legend.position = "none")
+calibrated
 ```
 
 
@@ -1201,4 +1306,5 @@ cowplot::plot_grid(
 ```
 
 
-![image](./results/fine_tuning.png)
+
+

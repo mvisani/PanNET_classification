@@ -1,41 +1,31 @@
-#-----------------------------------------------------------------------------------
-# training Random Forest classifier
-#                                                                     
-# Martin Sill
-# m.sill@dkfz.de                                                                  
-# 
-# Note, in this example we reduce the number of features to 20k probes by sd filtering before applying the random forest for 
-# feature selection. To perform feature selection as described in the paper remove line 34,
-# this will increase the computation time significantly.
-#
-# 2018-03-14 UTC
-#------------------------------------------------------------------------------------                   
-#options(max.print = 1000)
-#options(stringsAsFactors = FALSE)
-#options(scipen = 999)
 rm(list=ls())
+args <- commandArgs(trailingOnly=TRUE)
+
+if (length(args)==0) {
+  stop("Please specify your output directory as first argument and the number of probes as second argument", call.=FALSE)
+}
 
 library(randomForest)
 library(doParallel)
-#setwd("..")
 
-#ntrees <- 10000 
-ntrees <- 1000
+ntrees <- 500  # 10000 in the paper, here 500 to speed up the example
 cores <- detectCores()-1
 seed <- 180314
-p <- 2000
 
+outdir <- as.character(args[1])
+dir.create(paste0("../", outdir),showWarnings = FALSE)
+p <- as.double(args[2])
 
 message("loading preprocessed data ...",Sys.time())
 #load(file.path("results","betas.ba.RData"))
 if (!exists("betas"))
   betas <- as.data.frame(readRDS("../data/results/meth_combat_beta.Rds"))
 if (!exists("meta_data"))
-  meta_data <- read.table(file = "../data/meta_data/training_meta_data.txt", sep = "\t", header = T)
+  meta_data <- read.table(file = "../data/meta_data/training_meta_data_new.txt", sep = "\t", header = T)
 
 message("performing variable selection ...",Sys.time())
 source(file.path("R","train.R"))
-y <- as.factor(meta_data$CC_Epi_newLRO)
+y <- as.factor(meta_data$Four_classes)
 
 # sd pre filtering to 20k probes, to speed up the example
 #betas <- betas[,order(-apply(betas,2,sd))]
@@ -53,7 +43,6 @@ rf.varsel <- rfp(betas,
                  mc=cores,
                  mtry = floor(sqrt(nrow(betas))),
                  ntree=ntrees,
-                 tree_total=ntrees,
                  sampsize=rep(min(table(y)),length(table(y))),
                  importance=TRUE)
 
@@ -62,7 +51,7 @@ rf.varsel <- rfp(betas,
 imp.meandecrease <- importance(rf.varsel, type=1)
 
 # save selection forest
-save(rf.varsel,file=file.path("..","results","varsel.2000.RData"))
+save(rf.varsel,file=file.path("..",outdir,"varsel.RData"))
 rm(rf.varsel)
 
 # reduce data matrix
@@ -91,12 +80,12 @@ rf.pred <- randomForest(betasy,
                         oob.prox=TRUE,
                         importance=TRUE,
                         keep.inbag=TRUE,
-                        do.trace=1000,
+                        do.trace=FALSE,
                         seed=seed
 )
 
 message("finished ...",Sys.time())
 
-save(rf.pred,file=file.path("..","results","rf.pred.2000.RData"))
+save(rf.pred,file=file.path("..",outdir,"rf.pred.RData"))
 
 message("finished ...",Sys.time())

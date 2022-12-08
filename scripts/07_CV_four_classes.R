@@ -1,43 +1,31 @@
-#-----------------------------------------------------------------------------------
-# nested cross-validation 
-#                                                                     
-# Martin Sill
-# m.sill@dkfz.de                                                                  
-# 
-# 2018-03-14 UTC
-#------------------------------------------------------------------------------------                   
-#options(max.print = 1000)
-#options(stringsAsFactors = FALSE)
-#options(scipen = 999)
 rm(list=ls())
+args <- commandArgs(trailingOnly=TRUE)
+
+if (length(args)==0) {
+  stop("Please specify your output directory as first argument and the number of probes as second argument", call.=FALSE)
+}
 
 library(randomForest)
-library(parallel)
+library(doParallel)
 library(minfi)
 library(limma)
-#setwd("..")
 
-#ntrees <- 10000
-ntrees <- 1000
-cores <- detectCores() - 1
+ntrees <- 500  # 10000 in the paper, here 500 to speed up the example
+cores <- detectCores()-1
 seed <- 180314
-#p <- 2000
-p <- 2000
 folds <- 3
 
-#message("loading filtered Mset ...",Sys.time())
-#load(file.path("results","Mset_filtered.RData"))
+outdir <- as.character(args[1])
+dir.create(paste0("../", outdir),showWarnings = FALSE)
+p <- as.double(args[2])
 
-#y <- as.factor(anno$`methylation class:ch1`)
-#batch <- as.factor(anno$`material:ch1`)
 
-#load(file.path("results","betas.ba.RData"))
 if (!exists("betas"))
   betas <- readRDS("../data/results/meth_combat_beta.Rds")
 if (!exists("meta_data"))
-  meta_data <- read.table(file = "../data/meta_data/training_meta_data.txt", sep = "\t", header = T)
+  meta_data <- read.table(file = "../data/meta_data/training_meta_data_new.txt", sep = "\t", header = T)
 
-y <- as.factor(meta_data$CC_Epi_newLRO)
+y <- as.factor(meta_data$Four_classes)
 batch <- as.factor(meta_data$Technology)
 
 source(file.path("R","makefolds.R"))
@@ -45,12 +33,11 @@ source(file.path("R","train.R"))
 source(file.path("R","calculateCVfold.R"))
 source(file.path("R","batchadjust.R"))
 
-if(!file.exists(file.path("..", "CV_2000","nfolds.RData"))){
-  dir.create("../CV_2000",showWarnings = FALSE)
+if(!file.exists(file.path("..", outdir,"nfolds.RData"))){
   nfolds <- makenestedfolds(y,folds)
-  save(nfolds,file=file.path("..","CV_2000","nfolds.RData"))
+  save(nfolds,file=file.path("..",outdir,"nfolds.RData"))
 }
-load(file.path(".." ,"CV_2000","nfolds.RData"))
+load(file.path(".." ,outdir,"nfolds.RData"))
 
 message("performing nested CV ...", Sys.time())
 message("check minimal class sizes for inner training loops")
@@ -79,7 +66,7 @@ for(K in 1:folds){
     rf.scores <- calcultateCVfold(betas,y,batch,fold,p,cores,ntrees)
     
     fname <- paste("CVfold",K,k,"RData",sep=".")
-    save(rf.scores,file=file.path("..", "CV_2000",fname))
+    save(rf.scores,file=file.path("..", outdir,fname))
     
     rm(rf.scores)
     gc()

@@ -1,26 +1,16 @@
-#-----------------------------------------------------------------------------------
-# this script fits for each CV fold a multinomial L2-penalized glmnet model to calibrate RF scores
-# and one final calibration model using RF scores generated in the out loop of the CV 
-# After calibration CV results are calculated in CVresults.Rmd which is compiled to an html report
-#
-# Martin Sill
-# m.sill@dkfz.de                                                                  
-# 
-# 2018-03-14 UTC
-#------------------------------------------------------------------------------------                   
-#options(max.print = 1000)
-#options(stringsAsFactors = FALSE)
-#options(scipen = 999)
 rm(list=ls())
+args <- commandArgs(trailingOnly=TRUE)
+
+if (length(args)==0) {
+  stop("Please specify your output directory", call.=FALSE)
+}
+outdir <- as.character(args[1])
+dir.create(paste0("../", outdir),showWarnings = FALSE)
+
 library(rmarkdown)
 library(glmnet)
 library(doParallel)
 library(HandTill2001)
-#setwd("..")
-
-cores <- detectCores()-1
-
-registerDoParallel(cores)
 
 message("loading data ...",Sys.time())
 if (!exists("betas"))
@@ -29,14 +19,14 @@ if (!exists("meta_data"))
   meta_data <- read.table(file = "../data/meta_data/training_meta_data_new.txt", sep = "\t", header = T)
 
 #load(file.path("results","Mset_filtered.RData"))
-load(file.path("..","CV_four_classes","nfolds.RData"))
+load(file.path("..",outdir,"nfolds.RData"))
 
 for(i in 1:length(nfolds)){
   scores <- list() 
   idx <- list()
   for(j in 1:length(nfolds)){
     fname <- paste0("CVfold.",i,".",j,".RData")
-    load(file.path("..","CV_four_classes",fname))
+    load(file.path("..",outdir,fname))
     scores[[j]] <- rf.scores
     idx[[j]] <- nfolds[[i]][[2]][[j]]$test
   }
@@ -50,7 +40,7 @@ for(i in 1:length(nfolds)){
                                           alpha=0,nlambda=100,lambda.min.ratio=10^-6,parallel=TRUE))
   
   fname <- paste0("CVfold.",i,".",0,".RData")
-  load(file.path("..", "CV_four_classes",fname))
+  load(file.path("..", outdir,fname))
   
   message("calibrating raw scores fold ",i," ...",Sys.time())
   probs <- predict(cv.calfit$glmnet.fit,newx=rf.scores,type="response"
@@ -62,14 +52,14 @@ for(i in 1:length(nfolds)){
   message("misclassification error: ",err)
   
   fname_probs <- paste0("probsCVfold.",i,".",0,".RData")
-  save(probs,file=file.path("..","CV_four_classes",fname_probs))
+  save(probs,file=file.path("..",outdir,fname_probs))
 }
 
 scores <- list()
 idx <- list()
 for(i in 1:length(nfolds)){
   fname <- paste0("CVfold.",i,".",0,".RData")
-  load(file.path("..", "CV_four_classes",fname))
+  load(file.path("..", outdir,fname))
   scores[[i]] <- rf.scores
   idx[[i]] <- nfolds[[i]][[1]][[1]]$test
 }
@@ -78,7 +68,7 @@ scores <- do.call(rbind,scores)
 probl <- list()
 for(i in 1:length(nfolds)){
   fname <- paste0("probsCVfold.",i,".",0,".RData")
-  load(file.path("..", "CV_four_classes",fname))
+  load(file.path("..", outdir,fname))
   probl[[i]] <- probs
 }
 probs <- do.call(rbind,probl)
@@ -101,9 +91,9 @@ message("fitting final calibration model ...",Sys.time())
 suppressWarnings(cv.calfit <- cv.glmnet(y=y,x=scores,family="multinomial",type.measure="mse",
                                         alpha=0,nlambda=100,lambda.min.ratio=10^-6,parallel=TRUE))
 
-save(cv.calfit,file=file.path("..", "results","calfit_four_classes.RData"))
+save(cv.calfit,file=file.path("..", outdir,"calfit.RData"))
 
-save(scores,probs,y,ys,yp,file=file.path("..", "results","CVresults_four_classes.RData"))
+save(scores,probs,y,ys,yp,file=file.path("..", outdir,"CVresults.RData"))
 
 #message("generating report ...",Sys.time())
 #rmarkdown::render("CVresults_2000.Rmd")

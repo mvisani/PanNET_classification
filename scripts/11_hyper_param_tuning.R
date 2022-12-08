@@ -1,12 +1,13 @@
-#rm(list=ls())
+rm(list=ls())
 
 library(randomForest)
 library(minfi)
 library(limma)
+library(doParallel)
 #setwd("..")
 
-ntrees <- c(100, 500, 1000, 5000, 10000)
 cores <- detectCores() - 1
+ntrees <- c(100, 500, 1000, 5000, 10000)
 seed <- 180314
 p <- c(10, 100, 1000, 10000)
 folds <- 3
@@ -16,33 +17,53 @@ if (!exists("betas"))
 if (!exists("meta_data"))
   meta_data <- read.table(file = "../data/meta_data/training_meta_data.txt",
                           sep = "\t", header = T)
-
 y <- as.factor(meta_data$CC_Epi_newLRO)
-#betas <- t(betas)
+source(file.path("R","makefolds.R"))
+source(file.path("R", "train.R"))
+nfolds <- makenestedfolds(y,folds)
 
-load(file = "../results/varsel.RData")
+betas <- t(betas)
+rf.varsel <- rfp(betas,
+                 y,
+                 mc=cores,
+                 mtry = floor(sqrt(nrow(betas))),
+                 ntree=10000,
+                 sampsize=rep(min(table(y)),length(table(y))),
+                 importance=TRUE, 
+                 seed = seed)
+
+
 imp.meandecrease <- importance(rf.varsel, type=1)
 or <- order(imp.meandecrease,decreasing=T)
 
-par(mfrow=c(4, 5),
-    mar = c(2, 2, 2, 2))
+png(filename = "../results/fine_tuning.png", width = 2000, height = 1752)
+par(mfrow=c(length(p), length(ntrees)), mar = c(2, 2, 2, 2))
+#par(mfrow=c(2,3))
 for (probes in p) {
   for (j in ntrees) {
-    cv <- rfcv(betas[,or[1:probes]],
-         y,
-         cv.fold = folds, 
-         ntree = j,
-         seed = seed)
-    with(cv, plot(n.var,
-                  error.cv,
-                  type="o",
-                  lwd=2,
-                  log="x",
-                  ylim=c(0,1),
-                  xlab="n.probes",
-                  ylab="error.cv", 
-                  main= paste0("Top ", probes, " probes and delopped with ", j, " trees."),
-                  cex.main = 0.7))
+    plot(NA, main= paste0("Top ", probes, " probes with ", j, " trees."),
+         xlab="n.probes",
+         ylab="error.cv",
+         ylim=c(0,1),
+         xlim=c(1, probes),
+         cex.main = 1.5,
+         log="x"
+         )
+    
+    for (i in 1:length(nfolds)){
+      samp <- nfolds[[i]][[1]][[1]][["train"]]
+      cv <- rfcv(betas[samp,or[1:probes]],
+                 y[samp],
+                 cv.fold = folds, 
+                 ntree = j,
+                 seed = seed)
+      with(cv, lines(n.var,
+                    error.cv,
+                    type="o",
+                    lwd=2,
+                    col=i))
+    }
     abline(h=0.2, lty=2)
   }
 }
+dev.off()

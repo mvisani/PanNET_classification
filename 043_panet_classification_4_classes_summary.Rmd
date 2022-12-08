@@ -1,0 +1,323 @@
+---
+title: "043_panet_classification_4_classes"
+author: "Marco Visani"
+date: '`r Sys.Date()`'
+output:
+  html_document:
+    number_sections: true
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = F)
+```
+
+# Classifier cross-validation
+Batch effect was NOT taken into account here !
+```{r}
+rm(list=ls())
+load_file <- function(file=file){
+  load(file = file, temp_env <- new.env())
+  data <- as.list(temp_env)
+  return(CV_result(data=data))
+}
+
+CV_result <- function(data=data){
+  require(pROC)
+  require(HandTill2001)
+  source(file.path("scripts", "R","multi_brier.R"))
+  source(file.path("scripts", "R","multi_logloss.R"))
+  AUCscores <- HandTill2001::auc(multcap(response=as.factor(data$y),predicted=data$scores))
+  AUCprobs <-  HandTill2001::auc(multcap(response=as.factor(data$y),predicted=data$probs))
+  
+  errs <- sum(data$y!=data$ys)/length(data$y)
+  errp <- sum(data$y!=data$yp)/length(data$y)
+  
+  briers <- brier(data$scores,data$y)
+  brierp <- brier(data$probs,data$y) 
+  
+  logls <- mlogloss(data$scores,data$y)
+  loglp <- mlogloss(data$probs,data$y) 
+  
+  out <- cbind(c(AUCscores,AUCprobs),c(errs,errp),c(briers,brierp),c(logls,loglp))
+  colnames(out) <- c("auc","misclassification","brier score","logloss")
+  rownames(out) <- c("raw scores","calibrated scores")
+  
+  y.true <- data$y
+  y.score <- data$ys
+  y.calibrated <- data$yp
+  return(list(AUCprobs=AUCprobs,
+              AUCscores=AUCscores, errs=errs,
+              errp=errp, briers=briers, brierp=brierp,
+              logls=logls, loglp=loglp, out=out,
+              y.true=y.true, y.score=y.score, y.calibrated=y.calibrated, 
+              scores=data$scores,
+              probs=data$probs))
+}
+
+confusion_matrix <- function(data=data,n_probes=n_probes){
+  require(pheatmap)
+  require(RColorBrewer)
+  require(ggplot2)
+  m <-table(data$y.true, data$y.calibrated)
+  m <- m/apply(m, 1, sum)
+  
+  return(
+  pheatmap(m,
+           display_numbers = table(data$y.true, data$y.calibrated),
+           fontsize_number=15,
+           fontsize_row=15,
+           fontsize_col = 15,
+           angle_col = 45,
+           treeheight_row = 0,
+           treeheight_col = 0,
+           cluster_rows = F,
+           cluster_cols = F,
+           color=colorRampPalette(c("white", "red"))(100),
+           main=paste0("Confusion matrix of top ", n_probes," probes."))
+  )
+}
+
+
+ROC_graph <- function(data=data, n_probes=n_probes){
+  require(pROC)
+  require(ggplot2)
+  require(RColorBrewer)
+  roc_resp <- as.numeric(data$y.true!=data$y.calibrated)
+  predictor_roc <- apply(data$probs, 1, max)
+  roc_to_plot <- roc(response=roc_resp, predictor=predictor_roc, ci=TRUE, of="se")
+  roc_with_ci <- function(obj) {
+    ciobj <- obj$ci
+    dat.ci <- data.frame(x = as.numeric(rownames(ciobj)),
+                         lower = ciobj[, 1],
+                         upper = ciobj[, 3])
+    
+    ggroc(obj, legacy.axes = T) +
+      theme_minimal() +
+      geom_abline(
+        slope = 1,
+        intercept = 0,
+        linetype = "dashed",
+        alpha = 0.7,
+        color = "black"
+      ) + coord_equal() +
+      geom_ribbon(
+        data = dat.ci,
+        aes(x = 1-x, ymin = lower, ymax = upper),
+        fill = "steelblue",
+        alpha = 0.3
+      ) + ggtitle(paste0("AUC of ", format(round(obj$auc, 2), nsmall = 2), " for top ", n_probes, " probes."))
+  } 
+  
+  return(roc_with_ci(roc_to_plot))
+}
+
+calibrated_score_plot <- function(data=data){
+  require(ggplot2)
+  require(ggridges)
+  calibrated_score <- as.data.frame(data$probs)
+  calibrated_score <- calibrated_score[data$y.true == data$y.calibrated, ]
+  max <- apply(calibrated_score, 1, max)
+  Classes <- colnames(calibrated_score)[apply(calibrated_score, 1, which.max)]
+  calibrated_score <- cbind(calibrated_score, max)
+  calibrated_score <- cbind(calibrated_score, Classes)
+  
+  # plot the raw scores
+  calibrated <- ggplot(calibrated_score, aes(x = max, y = Classes, fill = Classes)) +
+    xlim(0,1.2) +
+    ggtitle("Calibrated scores for correctly classified cases") +
+    geom_density_ridges() +
+    theme_ridges() + 
+    theme(legend.position = "none")
+  return(calibrated)
+}
+
+raw_score_plot <- function(data=data){
+  require(ggplot2)
+  require(ggridges)
+  raw_score <- as.data.frame(data$scores)
+  raw_score <- raw_score[data$y.true == data$y.score, ]
+  max <- apply(raw_score, 1, max)
+  Classes <- colnames(raw_score)[apply(raw_score, 1, which.max)]
+  raw_score <- cbind(raw_score, max)
+  raw_score <- cbind(raw_score, Classes)
+  
+  # plot the raw scores
+  raw <- ggplot(raw_score, aes(x = max, y = Classes, fill = Classes)) +
+    xlim(0,1.2) +
+    ggtitle("Raw scores for correctly classified cases") +
+    geom_density_ridges() +
+    theme_ridges() + 
+    theme(legend.position = "none")
+  return(raw)
+}
+
+```
+
+```{r load all files}
+probes_10 <- load_file(file="./out_10_probes_4_classes/CVresults.RData")
+probes_25 <- load_file(file="./out_25_probes_4_classes/CVresults.RData")
+probes_50 <- load_file(file="./out_50_probes_4_classes/CVresults.RData")
+probes_100 <- load_file(file="./out_100_probes_4_classes/CVresults.RData")
+probes_200 <- load_file(file="./out_200_probes_4_classes/CVresults.RData")
+probes_500 <- load_file(file="./out_500_probes_4_classes/CVresults.RData")
+
+```
+
+```{r, echo=FALSE, include=FALSE}
+conf_mat_10 <- confusion_matrix(probes_10, 10)
+conf_mat_25 <- confusion_matrix(probes_25, 25)
+conf_mat_50 <- confusion_matrix(probes_50, 50)
+conf_mat_100 <- confusion_matrix(probes_100, 100)
+conf_mat_200 <- confusion_matrix(probes_200, 200)
+conf_mat_500 <- confusion_matrix(probes_500, 500)
+```
+
+```{r, fig.height=20, fig.width=20}
+library("grid")
+library("gridExtra")
+library("pheatmap")
+library("ggplot2")
+
+grid.arrange(grobs=list(conf_mat_10[[4]],
+                        conf_mat_25[[4]],
+                        conf_mat_50[[4]],
+                        conf_mat_100[[4]],
+                        conf_mat_200[[4]],
+                        conf_mat_500[[4]]), ncol=2)
+```
+
+**For top 10 probes** 
+```{r}
+require(kableExtra)
+probes_10$out %>% kbl %>% kable_styling()
+```
+
+
+**For top 25 probes**
+```{r}
+require(kableExtra)
+probes_25$out %>% kbl %>% kable_styling()
+```
+
+
+**For top 50 probes **
+```{r}
+require(kableExtra)
+probes_50$out %>% kbl %>% kable_styling()
+```
+
+
+**For top 100 probes **
+```{r}
+require(kableExtra)
+probes_100$out %>% kbl %>% kable_styling()
+```
+
+
+**For top 200 probes **
+```{r}
+require(kableExtra)
+probes_200$out %>% kbl %>% kable_styling()
+```
+
+
+**For top 500 probes **
+```{r}
+require(kableExtra)
+probes_500$out %>% kbl %>% kable_styling()
+```
+
+
+```{r, fig.height=10, fig.width=14}
+roc_10 <- ROC_graph(probes_10, 10)
+roc_25 <- ROC_graph(probes_25, 25)
+roc_50 <- ROC_graph(probes_50, 50)
+roc_100 <- ROC_graph(probes_100, 100)
+roc_200 <- ROC_graph(probes_200, 200)
+roc_500 <- ROC_graph(probes_500, 500)
+```
+
+```{r, fig.height=10, fig.width=14}
+cowplot::plot_grid(roc_10,
+                   roc_25, 
+                   roc_50,
+                   roc_100,
+                   roc_200,
+                   roc_500,
+                   ncol =3, align = "v")
+```
+
+```{r}
+raw_10 <- raw_score_plot(probes_10)
+raw_25 <- raw_score_plot(probes_25)
+raw_50 <- raw_score_plot(probes_50)
+raw_100 <- raw_score_plot(probes_100)
+raw_200 <- raw_score_plot(probes_200)
+raw_500 <- raw_score_plot(probes_500)
+```
+
+```{r}
+calibrated_10 <- calibrated_score_plot(probes_10)
+calibrated_25 <- calibrated_score_plot(probes_25)
+calibrated_50 <- calibrated_score_plot(probes_50)
+calibrated_100 <- calibrated_score_plot(probes_100)
+calibrated_200 <- calibrated_score_plot(probes_200)
+calibrated_500 <- calibrated_score_plot(probes_500)
+```
+
+```{r, fig.width=15, fig.height=20}
+cowplot::plot_grid(raw_10, calibrated_10,
+                   raw_25, calibrated_25,
+                   raw_50, calibrated_50,
+                   raw_100, calibrated_100,
+                   raw_200, calibrated_200,
+                   raw_500, calibrated_500,
+  ncol = 2, labels = c(rep(c("10 probes", "25 probes", "50 probes", "100 probes", 
+      "200 probes", "500 probes"),each=2)))
+```
+
+
+# Probes  in DiDomenico paper
+
+```{r, echo=FALSE, include=T}
+require(readxl)
+alpha_vs_beta <-  read_xlsx(path="./data/raw_data/DiDomenico_2020_T6_alpha_like_v_beta_like.xlsx",
+                           skip = 2)
+alpha_vs_beta <- alpha_vs_beta[,1]
+colnames(alpha_vs_beta) <- "probes"
+
+alpha_vs_intermediate <- read_xlsx(path = "./data/raw_data/DiDomenico_2020_T7_alpha_like_v_intermediate.xlsx",
+                                   skip = 2)
+alpha_vs_intermediate <- alpha_vs_intermediate[,1]
+colnames(alpha_vs_intermediate) <- "probes"
+
+intermediate_vs_beta <- read_xlsx(path = "./data/raw_data/DiDomenico_2020_T8_intermediate_v_beta_like.xlsx",
+                                  skip = 2)
+intermediate_vs_beta <- intermediate_vs_beta[,1]
+colnames(intermediate_vs_beta) <- "probes"
+```
+
+```{r}
+require(dplyr)
+require(randomForest)
+load(file="./out_100_probes_4_classes/rf.pred.RData")
+probes <- as.data.frame(rownames(importance(rf.pred, type=1)))
+colnames(probes) <- "probes"
+final_probes <- unique(c(intersect(alpha_vs_beta$probes, probes$probes),
+                  intersect(alpha_vs_intermediate$probes, probes$probes),
+                  intersect(intermediate_vs_beta$probes, probes$probes)
+)
+)
+
+```
+
+```{r, echo=FALSE, include=T}
+require(ChAMP)
+data("probe.features")
+```
+
+```{r}
+require(kableExtra)
+probe.features[final_probes,] %>% kbl %>% kable_styling()
+```
