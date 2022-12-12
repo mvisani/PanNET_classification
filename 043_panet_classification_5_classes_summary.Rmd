@@ -522,6 +522,8 @@ cowplot::plot_grid(raw_10, calibrated_10,
 ```
 
 From here we decided that 100 probes would be the best fit. To avoid overfitting, we decided to stay parsimonious and keep the lowest possible amount of probes. Unfortunately, calibration seemed not to increase the scores so well. This is probably due to the lack of little data we have. The classes with enough data or data were very different form the rest of the dataset (Intermediate_ADM and Beta_like)  could have their score increased but the others couldn't. 
+
+
 ## Consensus clustering
 
 ```{r}
@@ -655,6 +657,7 @@ final_probes <- unique(c(intersect(alpha_vs_beta$probes, probes$probes),
 ```{r, echo=FALSE, include=T, message=FALSE}
 require(ChAMP)
 data("probe.features")
+probe.features <- probe.features[, 1:11]
 ```
 
 ```{r}
@@ -663,4 +666,35 @@ probe.features[final_probes,] %>% kbl %>% kable_styling()
 ```
 
 
+# Predicting new data
+
+```{r}
+rm(list=ls())
+require(kableExtra)
+require(randomForest)
+require(dplyr)
+
+test_beta <- readRDS(file = "./data/results/test_beta.Rds")
+meta_data <- read.table(file="./data/meta_data/test_EPIC_meta_data.txt", sep = "\t", header = T)
+load(file="./out_100_probes/rf.pred.RData")
+beta <- t(test_beta)
+probes <- rownames(importance(rf.pred, importance=1))
+beta <- beta[, probes]
+answer <- predict(rf.pred, beta, type = "prob")
+
+prediction <- colnames(answer)[apply(answer, 1, which.max)]
+answer <- cbind(answer, prediction)
+
+
+CC_epi <- meta_data$CC_Epi_newG1G2_plus_met
+answer <- cbind(answer, CC_epi)
+
+answer <- as.data.frame(answer)
+
+answer %>% kbl %>% kable_styling()
+```
+
+```{r}
+print(sum(answer$prediction==answer$CC_epi)/dim(answer)[1])
+```
 

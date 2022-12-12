@@ -5,9 +5,11 @@ library(limma)
 library(doParallel)
 
 cores <- detectCores() - 1
-ntrees <- c(100, 500, 1000, 5000, 10000)
+#ntrees <- c(100, 500, 1000, 5000, 10000)
+ntrees <- c(500)
 seed <- 180314
-p <- c(10, 100, 1000, 10000)
+#p <- c(10, 100, 1000, 10000)
+p <- c(10, 25, 50, 100, 200, 500)
 folds <- 3
 
 if (!exists("betas"))
@@ -34,9 +36,9 @@ rf.varsel <- rfp(betas,
 imp.meandecrease <- importance(rf.varsel, type=1)
 or <- order(imp.meandecrease,decreasing=T)
 
-png(filename = "../results/fine_tuning_4_classes.png", width = 2000, height = 1752)
-par(mfrow=c(length(p), length(ntrees)), mar = c(2, 2, 2, 2))
-#par(mfrow=c(2,3))
+png(filename = "../results/n_probe_selection_4_classes.png", width = 2000, height = 1538)
+#par(mfrow=c(length(p), length(ntrees)), mar = c(2, 2, 2, 2))
+par(mfrow=c(2,3))
 for (probes in p) {
   for (j in ntrees) {
     plot(NA, main= paste0("Top ", probes, " probes with ", j, " trees."),
@@ -54,6 +56,7 @@ for (probes in p) {
                  y[samp],
                  cv.fold = folds, 
                  ntree = j,
+                 do.trace=T,
                  seed = seed)
       with(cv, lines(n.var,
                     error.cv,
