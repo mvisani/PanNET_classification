@@ -14,6 +14,8 @@ knitr::opts_chunk$set(message = FALSE, warning = F)
 
 # Trees and probe selection
 
+As in the 5 classes case, we tried to optimize the number of trees and probes for computational efficiency and avoiding overfitting. 
+
 ![image](./results/fine_tuning_4_classes.png)
 
 ![image](./results/n_probe_selection_4_classes.png)
