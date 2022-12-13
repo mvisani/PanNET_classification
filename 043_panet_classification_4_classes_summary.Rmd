@@ -13,8 +13,12 @@ knitr::opts_chunk$set(message = FALSE, warning = F)
 ```
 
 # Trees and probe selection
+Please read first `043_panet_classification_5_classes_summary.Rmd` for introduction and QC of the dataset. 
 
-As in the 5 classes case, we tried to optimize the number of trees and probes for computational efficiency and avoiding overfitting. 
+
+As in the 5 classes case, we tried to optimize the number of trees and probes for computational efficiency and avoiding overfitting. If one want to reproduce the images below, please use the `11_hyper_param_tuning.R` script and set up the number of probes and trees accordingly. 
+
+In the image below, one can see that the number of trees doesn't influence much the result of the random forest. 
 
 ![image](./results/fine_tuning_4_classes.png)
 
