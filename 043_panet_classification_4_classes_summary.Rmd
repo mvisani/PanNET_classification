@@ -22,6 +22,9 @@ In the image below, one can see that the number of trees doesn't influence much 
 
 ![image](./results/fine_tuning_4_classes.png)
 
+In the image below one can see that increasing the number of probes doesn't improve the accuracy of the model. 
+We then decided to stick and for the 5 classes test to 500 trees and the top 100 probes. 
+
 ![image](./results/n_probe_selection_4_classes.png)
 
 
@@ -451,8 +454,8 @@ answer <- cbind(answer, prediction)
 four_classes <- meta_data$CC_Epi_newG1G2_plus_met
 four_classes[four_classes=="Intermediate_WT"] <- "Intermediate"
 four_classes[four_classes=="Intermediate_ADM_WT"] <- "Intermediate"
-meta_data["CC_epi_four_classes"] <- four_classes
-CC_epi_four_classes <- meta_data$CC_epi_four_classes
+meta_data["CC_Epi_newG1G2_individual"] <- four_classes
+CC_epi_four_classes <- meta_data$CC_Epi_newG1G2_individual
 answer <- cbind(answer, CC_epi_four_classes)
 
 answer <- as.data.frame(answer)

@@ -686,7 +686,7 @@ prediction <- colnames(answer)[apply(answer, 1, which.max)]
 answer <- cbind(answer, prediction)
 
 
-CC_epi <- meta_data$CC_Epi_newG1G2_plus_met
+CC_epi <- meta_data$CC_Epi_newG1G2_individual
 answer <- cbind(answer, CC_epi)
 
 answer <- as.data.frame(answer)
