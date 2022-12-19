@@ -431,6 +431,12 @@ grid.arrange(grobs=list(conf_mat_10[[4]],
                         conf_mat_500[[4]]), ncol=2)
 ```
 
+Shows confusion matrix as heatmap. Numbers in the cells indicates the number of samples counted in that cell. The color indicates the percentage of samples correctly identified in that class. 
+
+Should be read from right to left. For example, if we take the top left image, there are 21 Alpha_like  that were classified as Intermidiate_ADM. 
+
+## Misclassification rates
+
 **For top 10 probes** 
 ```{r}
 require(kableExtra)
@@ -471,6 +477,8 @@ probes_200$out %>% kbl %>% kable_styling()
 require(kableExtra)
 probes_500$out %>% kbl %>% kable_styling()
 ```
+
+Missclassification rates remain more or less stable starting from 50 probes or more. 
 
 
 ```{r, fig.height=10, fig.width=14}
@@ -521,7 +529,7 @@ cowplot::plot_grid(raw_10, calibrated_10,
       "200 probes", "500 probes"),each=2)))
 ```
 
-From here we decided that 100 probes would be the best fit. To avoid overfitting, we decided to stay parsimonious and keep the lowest possible amount of probes. Unfortunately, calibration seemed not to increase the scores so well. This is probably due to the lack of little data we have. The classes with enough data or data were very different form the rest of the dataset (Intermediate_ADM and Beta_like)  could have their score increased but the others couldn't. 
+From here we decided that 100 probes would be the best fit. To avoid overfitting, we decided to stay parsimonious and keep the lowest possible amount of probes. Unfortunately, calibration didn't seemed not to increase the scores very well. This is probably due to the amount of data we have. The classes with enough data or classes that were very different form the rest of the dataset (Intermediate_ADM and Beta_like) could have their score increased but the others couldn't. 
 
 
 ## Consensus clustering
@@ -581,6 +589,11 @@ colnames(meta_data)[which(names(meta_data) == "colnames(probs_plot)[apply(probs_
 max_score <- apply(probes_100$probs[meta_data$Sample_Name, ], 1, max)
 meta_data <- cbind(meta_data, max_score)
 
+#load(file="./results/k_means_clustering.RData")
+#colnames(groups) <- "k_mean"
+#meta_data <- cbind(meta_data, groups[meta_data$Sample_Name,])
+#colnames(meta_data)[which(names(meta_data) == "groups[meta_data$Sample_Name, ]")] <- "k_mean"
+#meta_data$k_mean <- as.factor(meta_data$k_mean)
 
 plotCCheatmap(cons_cluster, 
               metaData = meta_data %>% 
@@ -621,6 +634,7 @@ plotCCheatmap(cons_cluster,
 ```
 
 Here random forest doesn't classify the samples very well. 
+
 # Probes  in DiDomenico paper
 
 ```{r, echo=FALSE, include=T}
@@ -640,6 +654,27 @@ intermediate_vs_beta <- read_xlsx(path = "./data/raw_data/DiDomenico_2020_T8_int
 intermediate_vs_beta <- intermediate_vs_beta[,1]
 colnames(intermediate_vs_beta) <- "probes"
 ```
+
+```{r}
+require(dplyr)
+require(randomForest)
+frac <- c()
+for(i in c(25, 50, 100, 200, 500)){
+  load(file=paste0("./out_",i,"_probes/rf.pred.RData"))
+  probes <- as.data.frame(rownames(importance(rf.pred, type=1)))
+  colnames(probes) <- "probes"
+  final_probes <- unique(c(intersect(alpha_vs_beta$probes, probes$probes),
+                  intersect(alpha_vs_intermediate$probes, probes$probes),
+                  intersect(intermediate_vs_beta$probes, probes$probes)))
+  frac <- append(frac, length(final_probes)/i)
+                  
+} 
+plot(c(25, 50, 100, 200, 500), frac, type="o",
+     ylim=c(0.0, 0.18),
+     ylab="Fraction of DMP present in RF",
+     xlab="Number of probes in the RF")
+```
+
 
 ```{r}
 require(dplyr)
@@ -691,10 +726,10 @@ answer <- cbind(answer, CC_epi)
 
 answer <- as.data.frame(answer)
 
-answer %>% kbl %>% kable_styling()
+print(sum(answer$prediction==answer$CC_epi)/dim(answer)[1])
 ```
 
 ```{r}
-print(sum(answer$prediction==answer$CC_epi)/dim(answer)[1])
+answer[answer$prediction!=answer$CC_epi,] %>% kbl %>% kable_styling()
 ```
 

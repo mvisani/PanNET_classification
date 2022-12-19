@@ -460,10 +460,10 @@ answer <- cbind(answer, CC_epi_four_classes)
 
 answer <- as.data.frame(answer)
 
-answer %>% kbl %>% kable_styling()
+print(sum(answer$prediction==answer$CC_epi_four_classes)/dim(answer)[1])
 ```
 
 ```{r}
-print(sum(answer$prediction==answer$CC_epi_four_classes)/dim(answer)[1])
+answer[answer$prediction!=answer$CC_epi,] %>% kbl %>% kable_styling()
 ```
 
