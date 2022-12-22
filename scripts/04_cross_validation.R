@@ -11,7 +11,7 @@ library(minfi)
 library(limma)
 
 ntrees <- 500  # 10000 in the paper, here 500 to speed up the example
-cores <- detectCores()-1
+cores <- detectCores()
 seed <- 180314
 folds <- 3
 

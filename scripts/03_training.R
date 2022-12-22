@@ -9,7 +9,7 @@ library(randomForest)
 library(doParallel)
 
 ntrees <- 500  # 10000 in the paper, here 500 to speed up the example
-cores <- detectCores()-1
+cores <- detectCores()
 seed <- 180314
 
 outdir <- as.character(args[1])

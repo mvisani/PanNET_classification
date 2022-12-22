@@ -25,11 +25,15 @@ diff_meth_prob <- intersect(diff_meth_prob$probes, rownames(df))
 df <- df[diff_meth_prob,]
 df <- t(df)
 
-#gap_stat <- clusGap(df, FUN = hcut, K.max = 15, B = 20)
-#fviz_gap_stat(gap_stat)
+gap_stat <- clusGap(df, FUN = hcut, K.max = 25, B = 500, verbose = T)
+fviz_gap_stat(gap_stat)
 
-d <- dist(df, method = "euclidean")
-final_clust <- hclust(d, method = "ward.D2" )
-groups <- as.data.frame(cutree(final_clust, k=5))
-table(groups)
-save(groups, file = "../results/k_means_clustering.RData")
+
+#d <- dist(df, method = "euclidean")
+#final_clust <- hclust(d, method = "ward.D2" )
+#groups <- as.data.frame(cutree(final_clust, k=5))
+#table(groups)
+#save(groups, file = "../results/k_means_clustering.RData")
+#message("Finished !")
+#
+#plot(final_clust)
