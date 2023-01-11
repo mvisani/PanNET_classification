@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+#creates a random forest model based on the training data and a number of probes
+# specified by the user. All results of the pipeline go in the "out" directory 
+# 
 if [[ -z "${1}" ]]; then
   echo "Please enter the top n probes you want to select" 
   exit 1

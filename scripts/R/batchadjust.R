@@ -5,6 +5,7 @@
 # m.sill@dkfz.de                                                                  
 # 
 # 2018-03-14 UTC
+# This script has been modified in order to not take into account any batch effect. 
 #------------------------------------------------------------------------------------                   
 #options(max.print = 1000)
 #options(stringsAsFactors = FALSE)

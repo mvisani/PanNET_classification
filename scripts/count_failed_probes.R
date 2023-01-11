@@ -1,3 +1,5 @@
+# this script counts how many failed probes are present in the random forest model. 
+# this script is not so important
 rm(list = ls())
 require(ChAMP)
 library(DMRcate)

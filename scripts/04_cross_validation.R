@@ -1,3 +1,6 @@
+# Perform cross validation on the training data. 
+# The script will perform inner fold cross validations on model. 
+# for further explanation see : http://www.nature.com/doifinder/10.1038/nature26000 
 rm(list=ls())
 args <- commandArgs(trailingOnly=TRUE)
 
@@ -10,7 +13,7 @@ library(doParallel)
 library(minfi)
 library(limma)
 
-ntrees <- 500  # 10000 in the paper, here 500 to speed up the example
+ntrees <- 500 
 cores <- detectCores()
 seed <- 180314
 folds <- 3

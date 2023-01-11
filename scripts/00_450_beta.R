@@ -1,3 +1,6 @@
+# This script normalizes the 450k data that was used for training the random forest model
+# Normally it shouldn't be used anymore since new data should in principle only come from EPIC technology.
+
 rm(list = ls())
 library(DMRcate)
 library(dplyr)
@@ -38,6 +41,7 @@ row_names_450 <- sort(rownames(meth_450$mset))
 meth_450.beta <- getBeta(meth_450$mset, "Illumina")[row_names_450, ]
 rm(meth_450, row_names_450)
 
+#outputs in the pre_process directory
 mainDir <- ".."
 subDir <- "pre_process"
 dir.create(file.path(mainDir, subDir))

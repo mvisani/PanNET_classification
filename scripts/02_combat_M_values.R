@@ -1,3 +1,5 @@
+# normalization and batch effect removal of training data.
+# For new data use 00_normalization.R script
 rm(list = ls())
 library(DMRcate)
 library(dplyr)

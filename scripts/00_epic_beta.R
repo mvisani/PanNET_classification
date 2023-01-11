@@ -1,3 +1,8 @@
+# This script should in principle not be used anymore. 
+# This script was used for normalization of the 8 samples that were coming from EPIC technology.
+# If new data need to be normalized, please use the script 00_normalization.R since it cab be used to 
+# normalize any data comping from EPIC technology. 
+
 rm(list = ls())
 library(DMRcate)
 library(dplyr)

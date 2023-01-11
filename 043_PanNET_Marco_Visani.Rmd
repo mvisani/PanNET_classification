@@ -60,7 +60,7 @@ rm(meth_epic.rgSet)
 
 Removing legacy probes. 
 ```{r}
-EPIC_legacy_probes <-  read_delim("./data/legacy_probes/MethylationEPIC Missing Legacy CpG (v1.0_B3 vs. v1.0_B2).txt.gz",
+EPIC_legacy_probes <-  read_delim("P:/Forschung/GRP Perren_Marinoni/1. Group/2. People/17. Philipp Kirchner/projects/shared_data/Illumina_methylation_arrays/MethylationEPIC Missing Legacy CpG (v1.0_B3 vs. v1.0_B2).txt.gz",
                                 delim = "\t",
                                 show_col_types = F)
 
@@ -322,10 +322,10 @@ cowplot::plot_grid(
 
 ```{r}
 #meth_combat_beta <- ENmix::M2B(meth_combat)
-#saveRDS(meth_combat_beta, file="./data/results/meth_combat_beta.Rds")
+#saveRDS(meth_combat_beta, file="./data/results/20221017_meth_combat_beta.Rds")
 
 if (!exists("meth_combat_beta"))
-  meth_combat_beta <- as.data.frame(readRDS("./data/results/meth_combat_beta.Rds"))
+  meth_combat_beta <- as.data.frame(readRDS("./data/results/20221017_meth_combat_beta.Rds"))
 if (!exists("meta_data"))
   meta_data <- read.table("./data/meta_data/training_meta_data.txt", sep = "\t", header = T)
 ```
@@ -378,8 +378,6 @@ for (i in 1:length(final_forest)) {
 ```
 
 
-
-
 ```{r}
 gini_ranked <- matrix(data = NA, nrow = nrow(meth_combat_beta), ncol = 100)
 accuracy_ranked <- matrix(data = NA, nrow = nrow(meth_combat_beta), ncol = 100)
@@ -416,7 +414,7 @@ if (!exists("gini_ranked"))
 if (!exists("meta_data"))
   meta_data <- read.table(file = "./data/meta_data/training_meta_data.txt", sep = "\t", header = T)
 if (!exists("meth_combat_beta"))
-  meth_combat_beta <- as.data.frame(readRDS("./data/results/meth_combat_beta.Rds"))
+  meth_combat_beta <- as.data.frame(readRDS("./data/results/20221017_meth_combat_beta.Rds"))
 ```
 
 
@@ -426,9 +424,9 @@ accuracy_ranked <- accuracy_ranked[order(-accuracy_ranked$V101), ]
 accuracy_important_probes <- rownames(accuracy_ranked)
 accuracy_important_probes <- accuracy_important_probes[1:10000]
 
-#gini_ranked <- gini_ranked[order(-gini_ranked$V101), ]
-#gini_important_probes <- rownames(gini_ranked)
-#gini_important_probes <- gini_important_probes[1:10000]
+gini_ranked <- gini_ranked[order(-gini_ranked$V101), ]
+gini_important_probes <- rownames(gini_ranked)
+gini_important_probes <- gini_important_probes[1:10000]
 
 ```
 
@@ -572,291 +570,36 @@ for (i in names(coefficients)) {
 
 ```
 
-# Calibration
 ```{r}
-library(rmarkdown)
-library(glmnet)
-library(doParallel)
-library(HandTill2001)
-
-cores <- detectCores()-1
-
-registerDoParallel(cores)
-
-message("loading data ...",Sys.time())
-if (!exists("betas"))
-  betas <- readRDS("./data/results/meth_combat_beta.Rds")
-if (!exists("meta_data"))
-  meta_data <- read.table(file = "./data/meta_data/training_meta_data.txt", sep = "\t", header = T)
-
-#load(file.path("results","Mset_filtered.RData"))
-load(file.path("CV","nfolds.RData"))
-
-for(i in 1:length(nfolds)){
-  scores <- list() 
-  idx <- list()
-  for(j in 1:length(nfolds)){
-    fname <- paste0("CVfold.",i,".",j,".RData")
-    load(file.path("CV",fname))
-    scores[[j]] <- rf.scores
-    idx[[j]] <- nfolds[[i]][[2]][[j]]$test
+makefolds <- function(y,cv.fold=3){
+  n <- length(y)
+  nlvl <- table(y)
+  idx <- numeric(n)
+  folds <- list()
+  for (i in 1:length(nlvl)) {
+    idx[which(y == levels(y)[i])] <- sample(rep(1:cv.fold,length = nlvl[i]))
   }
-  scores <- do.call(rbind,scores)
-  idx <- unlist(idx)
-  y <- meta_data$CC_Epi_newLRO[idx]         
-  
-  message("fitting calbriation model fold ",i," ...",Sys.time())
-  # fit multinomial logistic ridge regression model
-  suppressWarnings(cv.calfit <- cv.glmnet(y=y,x=scores,family="multinomial",type.measure="mse",
-                                          alpha=0,nlambda=100,lambda.min.ratio=10^-6,parallel=TRUE))
-  
-  fname <- paste0("CVfold.",i,".",0,".RData")
-  load(file.path("CV",fname))
-  
-  message("calibrating raw scores fold ",i," ...",Sys.time())
-  probs <- predict(cv.calfit$glmnet.fit,newx=rf.scores,type="response"
-                   ,s=cv.calfit$lambda.1se)[,,1] # use lambda estimated by 10fold CVlambda
-  
-  
-  err <- sum(colnames(probs)[apply(probs,1,which.max)] != meta_data$CC_Epi_newLRO[nfolds[[i]][[1]][[1]]$test])/length(nfolds[[i]][[1]][[1]]$test)
-  
-  message("misclassification error: ",err)
-  
-  fname_probs <- paste0("probsCVfold.",i,".",0,".RData")
-  save(probs,file=file.path("CV",fname_probs))
+  for (i in 1:cv.fold){
+    folds[[i]] <- list(train = which(idx!=i),
+                       test =  which(idx==i)) 
+  }  
+  return(folds)
 }
-
-scores <- list()
-idx <- list()
-for(i in 1:length(nfolds)){
-  fname <- paste0("CVfold.",i,".",0,".RData")
-  load(file.path("CV",fname))
-  scores[[i]] <- rf.scores
-  idx[[i]] <- nfolds[[i]][[1]][[1]]$test
-}
-scores <- do.call(rbind,scores)
-
-probl <- list()
-for(i in 1:length(nfolds)){
-  fname <- paste0("probsCVfold.",i,".",0,".RData")
-  load(file.path("CV",fname))
-  probl[[i]] <- probs
-}
-probs <- do.call(rbind,probl)
-
-
-idx <- unlist(idx)
-y <- meta_data$CC_Epi_newLRO[idx] 
-
-ys <- colnames(scores)[apply(scores,1,which.max)]
-yp <- colnames(probs)[apply(probs,1,which.max)]
-
-errs <- sum(y!=ys)/length(y)
-errp <- sum(y!=yp)/length(y)
-
-message("overall misclassification error scores: ",errs)
-message("overall misclassification error calibrated: ",errp)
-
-message("fitting final calibration model ...",Sys.time())
-
-suppressWarnings(cv.calfit <- cv.glmnet(y=y,x=scores,family="multinomial",type.measure="mse",
-                                        alpha=0,nlambda=100,lambda.min.ratio=10^-6,parallel=TRUE))
-
-save(cv.calfit,file=file.path("results","calfit.RData"))
-
-save(scores,probs,y,ys,yp,file=file.path("results","CVresults.RData"))
-```
-
-
-```{r,echo=FALSE,message=FALSE,error=FALSE,warning=FALSE,fig.height=4,fig.width=12}
-rm(list=ls())
-library(pROC)
-library(HandTill2001)
-source(file.path("R","multi_brier.R"))
-source(file.path("R","multi_logloss.R"))
-
-load(file.path("results","CVresults.RData"))
-
-AUCscores <- HandTill2001::auc(multcap(response=as.factor(y),predicted=scores))
-AUCprobs <-  HandTill2001::auc(multcap(response=as.factor(y),predicted=probs))
-
-errs <- sum(y!=ys)/length(y)
-errp <- sum(y!=yp)/length(y)
-
-briers <- brier(scores,y)
-brierp <- brier(probs,y) 
-
-logls <- mlogloss(scores,y)
-loglp <- mlogloss(probs,y) 
-
-out <- cbind(c(AUCscores,AUCprobs),c(errs,errp),c(briers,brierp),c(logls,loglp))
-colnames(out) <- c("auc","misclassification","brier score","logloss")
-rownames(out) <- c("raw scores","calibrated scores")
-
-y.true <- y
-y.score <- ys
-y.calibrated <- yp
-out
-```
-
-```{r}
-table(y.true,y.score)
-table(y.true,y.calibrated)
-```
-
-```{r, fig.height=10}
-par(mfrow=c(3, 2))
-for(i in 1:ncol(scores)){
-  plot(x=scores[,i],y=probs[,i],ylim=c(0,1),pch=16,xlim=c(0,1),col=as.factor((y==colnames(scores)[i])),main=colnames(scores)[i] ,xlab="scores",ylab="calibrated scores")
-  abline(a=0,b=1,col="green",lty=2)
+makenestedfolds <- function(y,cv.fold=3){
+  nfolds <- list()
+  folds <- makefolds(y,cv.fold)
+  names(folds) <- paste0("outer",1:length(folds))
+  for(k in 1:length(folds)){
+    inner = makefolds(y[folds[[k]]$train],cv.fold)
+    names(inner) <- paste0("inner",1:length(folds))
+    for(i in 1:length(inner)){
+      inner[[i]]$train <- folds[[k]]$train[inner[[i]]$train]
+      inner[[i]]$test <- folds[[k]]$train[inner[[i]]$test]
+    }
+    nfolds[[k]] <- list(folds[k],inner) 
+  }
+  names(nfolds) <- paste0("outer",1:length(nfolds))
+  return(nfolds)
 }
 ```
 
-
-```{r}
-require(ggplot2)
-require(ggridges)
-raw_score <- as.data.frame(scores)
-raw_score["predicted"] <- as.vector(y.score)
-raw_score["CC_Epi_newLRO"] <- as.vector(y)
-raw_score <- raw_score[raw_score$predicted == raw_score$CC_Epi_newLRO, ]
-
-yl <- c()
-for (i in 1:nrow(raw_score)) {
-  x <- raw_score[i, 'predicted']
-  yl <- append(yl, raw_score[i, x])
-}
-raw_score["max"] <- yl
-rm(yl, x)
-
-# plot the raw scores
-raw <- ggplot(raw_score, aes(x = max, y = CC_Epi_newLRO, fill = CC_Epi_newLRO)) +
-  ggtitle("Raw scores for correctly classified cases") +
-  xlim(0,1.2) +
-  geom_density_ridges() +
-  theme_ridges() + 
-  theme(legend.position = "none")
-```
-
-```{r}
-require(ggplot2)
-require(ggridges)
-calibrated_score <- as.data.frame(probs)
-calibrated_score["predicted"] <- as.vector(y.calibrated)
-calibrated_score["CC_Epi_newLRO"] <- as.vector(y)
-calibrated_score <- calibrated_score[calibrated_score$predicted == calibrated_score$CC_Epi_newLRO, ]
-
-yl <- c()
-for (i in 1:nrow(calibrated_score)) {
-  x <- calibrated_score[i, 'predicted']
-  yl <- append(yl, calibrated_score[i, x])
-}
-calibrated_score["max"] <- yl
-rm(yl, x)
-
-# plot the raw scores
-calibrated <- ggplot(calibrated_score, aes(x = max, y = CC_Epi_newLRO, fill = CC_Epi_newLRO)) +
-  xlim(0,1.2) +
-  ggtitle("Calibrated scores for correctly classified cases") +
-  geom_density_ridges() +
-  theme_ridges() + 
-  theme(legend.position = "none")
-```
-
-
-
-```{r, fig.width=10}
-cowplot::plot_grid(
-  raw, 
-  calibrated,
-  ncol = 1)
-
-```
-
-```{r Cross-validation for 10000 best probes}
-rm(list=ls())
-if(!exists("meta_data"))
-  meta_data <- read.table("./data/meta_data/training_meta_data.txt", sep = "\t", header = T)
-
-if(!exists("meth_combat_beta"))
-  meth_combat_beta <- as.data.frame(readRDS("./data/results/meth_combat_beta.Rds"))
-load(file = "./CV/nfolds.RData")
-load(file = "./results/varsel.RData")
-require(randomForest)
-
-imp.meandecrease <- importance(rf.varsel, type=1)
-or <- order(imp.meandecrease,decreasing=T)
-
-plot(NA, ylim=c(0,1), xlim=c(1,10000),log="x", xlab="n.probes", ylab="error.cv",
-     main="Cross validation on top 10'000 probes")
-for (i in 1:length(nfolds)){
-  samp <- nfolds[[i]][[1]][[1]][["train"]]
-  cv <- rfcv(trainx = t(meth_combat_beta[or[1:10000], samp]),
-                   trainy = as.factor(meta_data$CC_Epi_newLRO[samp]), 
-                   cv.fold = 3,
-                   ntree =500)
-  with(cv, lines(n.var, error.cv, type="o", lwd=2, col=i))
-}
-
-```
-
-```{r Cross validation for 2000 best probes}
-rm(list=ls())
-if(!exists("meta_data"))
-  meta_data <- read.table("./data/meta_data/training_meta_data.txt", sep = "\t", header = T)
-
-if(!exists("meth_combat_beta"))
-  meth_combat_beta <- as.data.frame(readRDS("./data/results/meth_combat_beta.Rds"))
-load(file = "./CV/nfolds.RData")
-load(file = "./results/varsel.RData")
-require(randomForest)
-
-imp.meandecrease <- importance(rf.varsel, type=1)
-or <- order(imp.meandecrease,decreasing=T)
-
-plot(NA, ylim=c(0,1), xlim=c(1,5000),log="x", xlab="n.probes", ylab="error.cv",
-      main="Cross validation on top 2'000 probes")
-for (i in 1:length(nfolds)){
-  samp <- nfolds[[i]][[1]][[1]][["train"]]
-  cv <- rfcv(trainx = t(meth_combat_beta[or[1:2000], samp]), 
-       trainy = as.factor(meta_data$CC_Epi_newLRO[samp]), 
-       cv.fold = 3, ntree =500)
-  with(cv, lines(n.var, error.cv, type="o", lwd=2, col=i))
-}
-
-
-```
-
-```{r Cross val for 1000 best probes}
-rm(list=ls())
-require(ggplot2)
-if(!exists("meta_data"))
-  meta_data <- read.table("./data/meta_data/training_meta_data.txt", sep = "\t", header = T)
-
-if(!exists("meth_combat_beta"))
-  meth_combat_beta <- as.data.frame(readRDS("./data/results/meth_combat_beta.Rds"))
-load(file = "./CV/nfolds.RData")
-load(file = "./results/varsel.RData")
-require(randomForest)
-
-imp.meandecrease <- importance(rf.varsel, type=1)
-or <- order(imp.meandecrease,decreasing=T)
-
-plot(NA, ylim=c(0,1), xlim=c(1,1000),log="x", xlab="n.probes", ylab="error.cv",
-     main="Cross validation on top 1'000 probes")
-for (i in 1:length(nfolds)){
-  samp <- nfolds[[i]][[1]][[1]][["train"]]
-  cv <- rfcv(trainx = t(meth_combat_beta[or[1:1000], samp]), 
-       trainy = as.factor(meta_data$CC_Epi_newLRO[samp]), 
-       cv.fold = 3, ntree =500)
-  with(cv, lines(n.var, error.cv, type="o", lwd=2, col=i))
-}
-
-
-cv <- rfcv(trainx = t(meth_combat_beta[or[1:1000], ]), 
-       trainy = as.factor(meta_data$CC_Epi_newLRO), 
-       cv.fold = 3,
-       ntree =500)
-with(cv, lines(n.var, error.cv, type="o", lwd=2, col=i+1))
-
-```

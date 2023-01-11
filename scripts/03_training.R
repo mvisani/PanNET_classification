@@ -1,3 +1,6 @@
+#this script will first run a random forest model on the total number of probes, 
+# select the most important probes and create a final model with 500 trees and the top n 
+# number of probes specified by the user. 
 rm(list=ls())
 args <- commandArgs(trailingOnly=TRUE)
 
@@ -8,7 +11,7 @@ if (length(args)==0) {
 library(randomForest)
 library(doParallel)
 
-ntrees <- 500  # 10000 in the paper, here 500 to speed up the example
+ntrees <- 500  
 cores <- detectCores()
 seed <- 180314
 

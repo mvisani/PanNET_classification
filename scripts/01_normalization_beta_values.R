@@ -1,3 +1,5 @@
+#this scirpt joins the datasets coming from the 2 different technologies for the training data.
+# Normally it shouldn't be used anymore. 
 rm(list = ls())
 library(DMRcate)
 library(dplyr)

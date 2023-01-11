@@ -1,4 +1,9 @@
 #!/usr/bin/env Rscript
+
+#This script allows to perform normalization of new data coming from EPIC technology.
+# The file should be run from the terminal with parameter specification. 
+# The scritp will perform ChamP QC, normalize the data, remove batch effect and 
+# output the data as M and Beta values. 
 rm(list=ls())
 library("optparse")
 
@@ -90,6 +95,7 @@ meth.norm <- meth.norm[, meta_data$Sample_Name]
 
 meth_cb_model <- model.matrix(~ 1 , data = meta_data)
 
+#remove batch effect on M values
 require(sva)
 meth_combat <- ComBat(ENmix::B2M(meth.norm),
                       batch = meta_data$Slide,

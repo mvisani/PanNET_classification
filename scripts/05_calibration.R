@@ -1,3 +1,5 @@
+# calibrates the score of the random forest. 
+# for details, see : http://www.nature.com/doifinder/10.1038/nature26000
 rm(list=ls())
 args <- commandArgs(trailingOnly=TRUE)
 

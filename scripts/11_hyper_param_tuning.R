@@ -1,3 +1,5 @@
+# output an image showing the model fine tuned. One should specifiy the number of probes and trees
+# and also if one wants to check for 4 classes model or 5 classes model. 
 rm(list=ls())
 library(randomForest)
 library(minfi)
