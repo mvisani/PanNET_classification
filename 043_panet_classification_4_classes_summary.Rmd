@@ -14,7 +14,7 @@ knitr::opts_chunk$set(message = FALSE, warning = F)
 
 # TLDR 
 First read `043_panet_classification_5_classes_summary.Rmd` for detailed explanantion of the results and the project. 
-We tested the same pipeline but merging 2 classes into one (Intermediate_ADM_WT and Intermediate_WT). The results are more or less similar. 
+We tested the same pipeline but merging 2 classes into one (Intermediate_ADM_WT and Intermediate_WT). The results are more or less similar.  
 
 # Trees and probe selection
 Please read first `043_panet_classification_5_classes_summary.Rmd` for introduction and QC of the dataset. 
