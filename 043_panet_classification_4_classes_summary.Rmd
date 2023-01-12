@@ -13,8 +13,8 @@ knitr::opts_chunk$set(message = FALSE, warning = F)
 ```
 
 # TLDR 
-We tested the same pipeline but merging 2 classes into one. The results are more or less similar. 
-
+First read `043_panet_classification_5_classes_summary.Rmd` for detailed explanantion of the results and the project. 
+We tested the same pipeline but merging 2 classes into one (Intermediate_ADM_WT and Intermediate_WT). The results are more or less similar. 
 
 # Trees and probe selection
 Please read first `043_panet_classification_5_classes_summary.Rmd` for introduction and QC of the dataset. 
@@ -30,6 +30,7 @@ We then decided to stick and for the 5 classes test to 500 trees and the top 100
 
 ![image](./results/n_probe_selection_4_classes.png)
 
+Same as for the 5 classes, above 100 probes, the accuracy remains the same. 
 
 # Classifier cross-validation
 Batch effect was NOT taken into account here !
@@ -389,6 +390,7 @@ plotCCheatmap(cons_cluster,
 
 ```
 
+There is less disagreement between the random forest and the consensus clustering. 
 
 ### Samples difficult to classify
 

@@ -15,3 +15,7 @@ meth_normalized.txt
 *.RData
 *.Rds
 data/legacy_probes/MethylationEPIC Missing Legacy CpG (v1.0_B3 vs. v1.0_B2).txt.gz
+./data/*
+./panet_classification.Rproj
+./results/*
+

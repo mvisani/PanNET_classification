@@ -24,8 +24,9 @@ knitr::opts_chunk$set(message = FALSE,warning = F)
 * Only a fraction of the probes of the random forest model are DMPs.
 * New data is predicted with 71% accuracy. 
 
-# Introduction
+If there are any questions, do not hesitate to contact me on GitHub (https://github.com/mvisani/PanNET_classification) or send me an email at \mailto{marco.visani\@unifr.ch}
 
+# Introduction
 Data received was of RGChannelSetExtended formal class. NOOB was run for both 450 and EPIC data. In order to include as much data as possible, low p value probes and low bead count probes were also included. Legacy probes were removed (total of 997 probes). The probes were sorted by probe name. Data was converted to beta values. Taking the intersect between the probe names of EPIC and 450K technology and the then data was joined together. Beta values were then normalized using `champ.norm`function. 
 
 Normalized beta values were converted back to M values. Data was adjusted for batch effect on the `Slide` using ComBat. Values were then converted back to beta values. 
@@ -194,7 +195,7 @@ cowplot::plot_grid(
   geom_point(), ncol =2, align = "v"
 )
 ```
-Again there seems to be no significant cluster. Maybe Beta-like samples are a little bit isolated 
+Again there seems to be no significant cluster. Maybe Beta-like samples are a little bit isolated. However, the main concern was on technology and as we can see, it doesn't seem to have an impact. 
 
 ```{r quantification of nromalization effect}
 
@@ -269,7 +270,7 @@ In order to select the ideal number of probes, we checked for confusion matrices
 **NOTE** the files for the 10'000, 2'000 and 1'000 probes have been deleted but if needed, the can be run using the the `pipeline_5_classes.sh` script with the corresponding number of probes. The number of trees still remains 500. If you want more trees, please change it in the scripts. 
 
 # Classifier cross-validation
-*Attention* Batch effect was NOT taken into account here ! The function in the scripts that removes batch effect has been modified. If you want to add batch effect, the function has to be modified. Please see https://github.com/mwsill/mnp_training/blob/master/R/calculateCVfold.R and https://github.com/mwsill/mnp_training/blob/master/R/batchadjust.R
+**Attention** Batch effect was NOT taken into account here ! The function in the scripts that removes batch effect has been modified. If you want to add batch effect, the function has to be modified. Please see https://github.com/mwsill/mnp_training/blob/master/R/calculateCVfold.R and https://github.com/mwsill/mnp_training/blob/master/R/batchadjust.R
 
 
 ```{r}
@@ -559,7 +560,7 @@ cowplot::plot_grid(raw_10, calibrated_10,
 
 From here we decided that 100 probes would be the best fit. To avoid overfitting, we decided to stay parsimonious and keep the lowest possible amount of probes. Unfortunately, calibration didn't seemed not to increase the scores very well. This is probably due to the amount of data we have. The classes with enough data or classes that were very different form the rest of the dataset (Intermediate_ADM and Beta_like) could have their score increased but the others couldn't. 
 
-In the future, if more data is added, calibration will have to be performed but right now it doesn't help our model. We decided that for predicting new data. We would keep the *uncalibrated score* for know. 
+In the future, if more data is added, calibration will have to be performed but right now it doesn't help our model. We decided that for predicting new data. We would keep the **uncalibrated score** for know. 
 
 
 ## Consensus clustering
