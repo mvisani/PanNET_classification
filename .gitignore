@@ -7,15 +7,8 @@ meth_normalized.txt
 .Rproj.user
 *.RData
 *.Rds
-<<<<<<< HEAD
-data/legacy_probes/MethylationEPIC Missing Legacy CpG (v1.0_B3 vs. v1.0_B2).txt.gz
-./data/*
-./panet_classification.Rproj
-./results/*
-=======
 data/*
 panet_classification.Rproj
 results/*
 .ipynb_checkpoints/
->>>>>>> c320227... added a few files to .gitignore file
-
+Master_Thesis_2021_PrintedVersion.pdf

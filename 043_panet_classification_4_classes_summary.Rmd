@@ -12,9 +12,13 @@ output:
 knitr::opts_chunk$set(message = FALSE, warning = F)
 ```
 
-# TLDR 
-First read `043_panet_classification_5_classes_summary.Rmd` for detailed explanantion of the results and the project. 
+# TL,DR 
+First read `043_panet_classification_5_classes_summary.Rmd` for detailed explanation of the results and the project. 
 We tested the same pipeline but merging 2 classes into one (Intermediate_ADM_WT and Intermediate_WT). The results are more or less similar.  
+
+Consensus clustering was run with $k=4$ clusters. 
+
+For further details or questions, please see my [GitHub](https://github.com/mvisani/PanNET_classification) page or send me and email at [marco.visani@unifr.ch](mailto:marco.visani@unifr.ch).
 
 # Trees and probe selection
 Please read first `043_panet_classification_5_classes_summary.Rmd` for introduction and QC of the dataset. 
@@ -23,12 +27,12 @@ As in the 5 classes case, we tried to optimize the number of trees and probes fo
 
 In the image below, one can see that the number of trees doesn't influence much the result of the random forest. 
 
-![image](./results/fine_tuning_4_classes.png)
+![image](./results/image/4_classes/tree_selection.png)
 
 In the image below one can see that increasing the number of probes doesn't improve the accuracy of the model. 
 We then decided to stick and for the 5 classes test to 500 trees and the top 100 probes. 
 
-![image](./results/n_probe_selection_4_classes.png)
+![image](./results/image/4_classes/probe_selection.png)
 
 Same as for the 5 classes, above 100 probes, the accuracy remains the same. 
 
@@ -390,7 +394,7 @@ plotCCheatmap(cons_cluster,
 
 ```
 
-There is less disagreement between the random forest and the consensus clustering. 
+There is less disagreement between the random forest and the consensus clustering. This is probably due to the fact that the random forest has a bigger sample group per class to train with. Another reason could be that the it is easier to classify the samples since there are only four classes instead of five.
 
 ### Samples difficult to classify
 
@@ -459,6 +463,7 @@ require(kableExtra)
 probe.features[final_probes, ] %>% kbl %>% kable_styling()
 ```
 
+Interestingly, the DMPs chosen by the classifier are completely different than the ones in the 5 classes case. 
 
 # Predicting new data
 
@@ -490,6 +495,8 @@ answer <- as.data.frame(answer)
 
 print(sum(answer$prediction==answer$CC_epi_four_classes)/dim(answer)[1])
 ```
+
+Here accuracy is much higher than for the 5 classes. 
 
 ```{r}
 answer[answer$prediction!=answer$CC_epi,] %>% kbl %>% kable_styling()
