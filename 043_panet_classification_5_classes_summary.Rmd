@@ -12,7 +12,7 @@ output:
 knitr::opts_chunk$set(message = FALSE,warning = F)
 ```
 
-# TL,DR (Too Long, Didn't Read)
+# TL;DR (Too Long; Didn't Read)
 * Training data taken from [_Di Domenico et al._ paper](https://doi.org/10.1038/s42003-020-01479-y) plus 30 additional samples.
 * Code taken and modified from https://github.com/mwsill/mnp_training.
 * Data was normalized and converted to beta values.
@@ -806,6 +806,8 @@ answer[answer$prediction!=answer$CC_epi,] %>% kbl %>% kable_styling()
 We can see that there are a couple of probes where the random forest is hesitating between two classes. This could mean that there are maybe more classes than expected. 
 
 It could be interesting to see if increasing the number of classes makes the random forest more accurate. However this involves the need of more data which for now we don't have. 
+
+Another possibility would be to increase the number of trees in the random forest. As we have seen before, this is not the most useful however, it could help in some cases. 
 
 # Outlook
 As we have seen, PanNETs are very difficult to classify. The lack of data and the accuracy of our response made it difficult to achieve results that could be used clinically. The main drawback right now is the lack of data. In fact, machine learning algorithms often need a lot of data in order to have a high precision. 

@@ -12,13 +12,24 @@ output:
 knitr::opts_chunk$set(message = FALSE, warning = F)
 ```
 
-# TL,DR 
+# TL;DR 
 First read `043_panet_classification_5_classes_summary.Rmd` for detailed explanation of the results and the project. 
 We tested the same pipeline but merging 2 classes into one (Intermediate_ADM_WT and Intermediate_WT). The results are more or less similar.  
 
 Consensus clustering was run with $k=4$ clusters. 
 
-For further details or questions, please see my [GitHub](https://github.com/mvisani/PanNET_classification) page or send me and email at [marco.visani@unifr.ch](mailto:marco.visani@unifr.ch).
+* Training data taken from [_Di Domenico et al._ paper](https://doi.org/10.1038/s42003-020-01479-y) plus 30 additional samples.
+* Code taken and modified from https://github.com/mwsill/mnp_training.
+* Data was normalized and converted to beta values.
+* QC performed.
+* Model went from 10'000 trees and 10'000 probes to 500 trees and 100 probes. 
+* Batch effect was NOT taken into account (and should be in the future as more data comes).
+* Cross validation shows 20-30% error rate.
+* Uncalibrated scores were kept because calibrated scores were increasing the error rate of the classes that were difficult to classify. 
+* Only a fraction of the probes of the random forest model are DMPs.
+* New data is predicted with 71% accuracy. 
+
+For further details or questions, please see my [GitHub](https://github.com/mvisani/PanNET_classification) page or send me an email at [marco.visani@unifr.ch](mailto:marco.visani@unifr.ch).
 
 # Trees and probe selection
 Please read first `043_panet_classification_5_classes_summary.Rmd` for introduction and QC of the dataset. 
@@ -38,6 +49,7 @@ Same as for the 5 classes, above 100 probes, the accuracy remains the same.
 
 # Classifier cross-validation
 Batch effect was NOT taken into account here !
+
 ```{r}
 rm(list=ls())
 load_file <- function(file=file){
@@ -211,6 +223,8 @@ grid.arrange(grobs=list(conf_mat_10[[4]],
                         conf_mat_500[[4]]), ncol=2)
 ```
 
+Here once again, we can clearly see that below 50 probes, the classifier is not accurate. Most Alpha like are classified as Intermediate_ADM. Otherwise, accuracy seems to be a bit better than for the 5 classes. 
+
 **For top 10 probes** 
 ```{r}
 require(kableExtra)
@@ -272,6 +286,8 @@ cowplot::plot_grid(roc_10,
                    ncol =3, align = "v")
 ```
 
+## Score calibration
+
 ```{r}
 raw_10 <- raw_score_plot(probes_10)
 raw_25 <- raw_score_plot(probes_25)
@@ -301,6 +317,7 @@ cowplot::plot_grid(raw_10, calibrated_10,
       "200 probes", "500 probes"),each=2)))
 ```
 
+Once again, score calibration doesn't help our model. For now and for predicting new data (see below), the raw score are kept. In the future, when more data is added, score calibration will have to be performed. 
 
 ## Consensus clustering
 ```{r}
@@ -397,6 +414,7 @@ plotCCheatmap(cons_cluster,
 There is less disagreement between the random forest and the consensus clustering. This is probably due to the fact that the random forest has a bigger sample group per class to train with. Another reason could be that the it is easier to classify the samples since there are only four classes instead of five.
 
 ### Samples difficult to classify
+We then checked for the samples that were difficult to classify. To do so, we selected the maximal score uncalibrated of each sample ( _i.e._ the class assigned by the random forest) and looked at if there was another score that was close to that maximimal score (5% of the trees or less, see code below). This would allow to find the samples that are difficult to classify and to be able to further investigate those samples or train the random forest without those samples. 
 
 ```{r}
 find_maximal_value <- function(row, threshold) {
@@ -411,7 +429,7 @@ find_maximal_value <- function(row, threshold) {
 
 
 # Apply the custom function to each row of the dataframe
-test <- apply(scores_plot, 1, find_maximal_value, threshold = 0.1)
+test <- apply(scores_plot, 1, find_maximal_value, threshold = 0.05)
 test <- t(test)
 
 #dim(test[apply(test, 1, function(x) sum(x)!=0),])
@@ -496,9 +514,11 @@ answer <- as.data.frame(answer)
 print(sum(answer$prediction==answer$CC_epi_four_classes)/dim(answer)[1])
 ```
 
-Here accuracy is much higher than for the 5 classes. 
+Here accuracy is much higher than for the 5 classes. The reason could be that the joining of two classes improved a lot the accuracy of the random forest. It could also be possible that the fact of joining two classes increases the chances of assigning a sample at random and being correct. 
+
 
 ```{r}
 answer[answer$prediction!=answer$CC_epi,] %>% kbl %>% kable_styling()
 ```
 
+As accuracy showed, there is less disagreement in the 4 classes than in the 5 classes case. 
